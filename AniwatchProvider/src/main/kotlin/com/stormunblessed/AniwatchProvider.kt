@@ -1,5 +1,6 @@
 package com.stormunblessed
 
+import android.annotation.SuppressLint
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addAniListId
@@ -174,6 +175,7 @@ class AniwatchProvider : MainAPI() {
         @JsonProperty("anilist_id") val aniListId: String?,
     )
 
+    @SuppressLint("SuspiciousIndentation")
     override suspend fun load(url: String): LoadResponse {
         val html = app.get(url).text
         val document = Jsoup.parse(html)
@@ -279,14 +281,13 @@ class AniwatchProvider : MainAPI() {
                     if (epHref == null || epTitle == null || epPoster == null) {
                         null
                     } else {
-                        AnimeSearchResponse(
+                        newAnimeSearchResponse(
                             epTitle,
                             fixUrl(epHref),
-                            this.name,
                             TvType.Anime,
-                            epPoster,
-                            dubStatus = null
-                        )
+                        ){
+                            this.posterUrl = epPoster
+                        }
                     }
                 }
 
@@ -647,39 +648,37 @@ class AniwatchProvider : MainAPI() {
                             ), false
                         )
                             .map { stream ->
-                                ExtractorLink(
+                                newExtractorLink(
                                     caller.name,
                                     "${caller.name} $name",
                                     stream.streamUrl,
-                                    caller.mainUrl,
-                                    getQualityFromName(stream.quality?.toString()),
-                                    true,
-                                    extractorData = extractorData
-                                )
+                                ){
+                                    this.referer = caller.mainUrl
+                                    this.quality = getQualityFromName(stream.quality?.toString())
+                                    this.extractorData = extractorData
+                                }
                             }
                     }.takeIf { !it.isNullOrEmpty() } ?: listOf(
                         // Fallback if m3u8 extractor fails
-                        ExtractorLink(
+                        newExtractorLink(
                             caller.name,
                             "${caller.name} $name",
                             this.file,
-                            caller.mainUrl,
-                            getQualityFromName(this.label),
-                            isM3u8,
-                            extractorData = extractorData
-                        )
+                        ){
+                            this.referer = caller.mainUrl
+                            this.extractorData = extractorData
+                        }
                     )
                 } else {
                     listOf(
-                        ExtractorLink(
+                        newExtractorLink(
                             caller.name,
                             caller.name,
                             file,
-                            caller.mainUrl,
-                            getQualityFromName(this.label),
-                            false,
-                            extractorData = extractorData
-                        )
+                        ){
+                            this.referer = caller.mainUrl
+                            this.extractorData = extractorData
+                        }
                     )
                 }
             }

@@ -20,7 +20,7 @@ class EstrenosDoramasProvider : MainAPI() {
 
     override var mainUrl = "https://www23.estrenosdoramas.net"
     override var name = "EstrenosDoramas"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasMainPage = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
@@ -40,17 +40,16 @@ class EstrenosDoramasProvider : MainAPI() {
             val home = app.get(url, timeout = 120).document.select("div.clearfix").map {
                 val title = cleanTitle(it.selectFirst("h3 a")?.text()!!)
                 val poster = it.selectFirst("img.cate_thumb")?.attr("src")
-                AnimeSearchResponse(
+                newAnimeSearchResponse(
                     title,
                     it.selectFirst("a")?.attr("href")!!,
-                    this.name,
                     TvType.AsianDrama,
-                    poster,
-                    null,
-                    if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(
+                ){
+                    this.posterUrl = poster
+                    this.dubStatus = if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(
                         DubStatus.Dubbed
-                    ) else EnumSet.of(DubStatus.Subbed),
-                )
+                    ) else EnumSet.of(DubStatus.Subbed)
+                }
             }
             items.add(HomePageList(name, home))
         }
@@ -66,18 +65,17 @@ class EstrenosDoramasProvider : MainAPI() {
                 val title = cleanTitle(it.selectFirst("h3 a")?.text()!!)
                 val href = it.selectFirst("a")?.attr("href")
                 val image = it.selectFirst("img.cate_thumb")?.attr("src")
-                val lists =
-                    AnimeSearchResponse(
+                val lists = newAnimeSearchResponse(
                         title,
                         href!!,
-                        this.name,
                         TvType.AsianDrama,
-                        image,
-                        null,
-                        if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(
+
+                    ){
+                    this.posterUrl = image
+                    this.dubStatus = if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(
                             DubStatus.Dubbed
-                        ) else EnumSet.of(DubStatus.Subbed),
-                    )
+                        ) else EnumSet.of(DubStatus.Subbed)
+                }
                 if (href.contains("capitulo")) {
                     //nothing
                 }
@@ -102,7 +100,7 @@ class EstrenosDoramasProvider : MainAPI() {
         val episodes = doc.select("div.post .lcp_catlist a").map {
             val name = it.selectFirst("a")?.text()
             val link = it.selectFirst("a")?.attr("href")
-            val test = Episode(link!!, name)
+            val test = newEpisode(link!!) { this.name = name}
             if (!link.equals(url)) {
                 epi.add(test)
             }
@@ -118,18 +116,15 @@ class EstrenosDoramasProvider : MainAPI() {
                 }
             }
             TvType.Movie -> {
-                MovieLoadResponse(
+                newMovieLoadResponse(
                     cleanTitle(title!!),
                     url,
-                    this.name,
                     TvType.Movie,
                     url,
-                    poster,
-                    null,
-                    finaldesc,
-                    null,
-                    null,
-                )
+                ){
+                    this.posterUrl = poster
+                    this.plot = finaldesc
+                }
             }
             else -> null
         }
@@ -145,7 +140,7 @@ class EstrenosDoramasProvider : MainAPI() {
 
     private fun cleanTitle(title: String): String = title.replace(Regex("[Pp]elicula |[Pp]elicula"),"")
 
-    private fun cleanExtractor(
+    private suspend fun cleanExtractor(
         source: String,
         name: String,
         url: String,
@@ -154,14 +149,14 @@ class EstrenosDoramasProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         callback(
-            ExtractorLink(
+            newExtractorLink(
                 source,
                 name,
-                url,
-                referer,
-                Qualities.Unknown.value,
-                m3u8
-            )
+                url
+            ){
+                this.referer = referer
+                this.quality = Qualities.Unknown.value
+            }
         )
         return true
     }

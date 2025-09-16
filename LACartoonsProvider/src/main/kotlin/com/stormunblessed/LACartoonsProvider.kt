@@ -8,7 +8,7 @@ import org.jsoup.nodes.Document
 class LACartoonsProvider:MainAPI() {
     override var mainUrl = "https://www.lacartoons.com"
     override var name = "LACartoons"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasMainPage = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
@@ -53,12 +53,12 @@ class LACartoonsProvider:MainAPI() {
             val name = it.selectFirst("a")?.text()?.replace(regexep, "")?.replace("-","")
             val seasonnum = href?.substringAfter("t=")
             val epnum = regexep.find(name.toString())?.destructured?.component1()
-            Episode(
+            newEpisode(
                 fixUrl(href!!),
-                name,
-                seasonnum.toString().toIntOrNull(),
-                epnum.toString().toIntOrNull(),
-            )
+            ){
+                this.season = seasonnum.toString().toIntOrNull()
+                this.episode = epnum.toString().toIntOrNull()
+            }
         }
 
         return newTvSeriesLoadResponse(title!!, url, TvType.Cartoon, episodes){

@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 
@@ -186,13 +187,10 @@ class PeliculasFlixProvider:MainAPI() {
                 val file = fi?.file ?: ""
                 if (check) {
                     callback(
-                        ExtractorLink(
+                        newExtractorLink(
                             this.name,
                             this.name,
                             file,
-                            "",
-                            Qualities.Unknown.value,
-                            file.contains(".m3u8")
                         )
                     )
                 } else {

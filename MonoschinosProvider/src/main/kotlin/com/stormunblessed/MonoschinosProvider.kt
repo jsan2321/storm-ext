@@ -102,17 +102,17 @@ class MonoschinosProvider : MainAPI() {
             val title = it.selectFirst("h3")!!.text()
             val href = fixUrl(it.selectFirst("a")!!.attr("href"))
             val image = it.selectFirst("img")!!.attr("data-src")
-            AnimeSearchResponse(
+            newAnimeSearchResponse(
                     title,
                     href,
-                    this.name,
                     TvType.Anime,
-                    fixUrl(image),
-                    null,
-                    if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(
+            ){
+                this.posterUrl = fixUrl(image)
+                this.dubStatus = if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(
                             DubStatus.Dubbed
-                    ) else EnumSet.of(DubStatus.Subbed),
-            )
+                    ) else EnumSet.of(DubStatus.Subbed)
+
+            }
         }
     }
 
@@ -127,7 +127,7 @@ class MonoschinosProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         getToken(url)
         val doc = app.get(url, timeout = 120).document
-        val caplist = doc.selectFirst(".caplist").attr("data-ajax")
+        val caplist = doc.selectFirst(".caplist")!!.attr("data-ajax")
         val poster = doc.selectFirst("img.w-100")!!.attr("data-src")
         val backimage = doc.selectFirst("img.rounded-3")!!.attr("data-src")
         val title = doc.selectFirst(".fs-2")!!.text()

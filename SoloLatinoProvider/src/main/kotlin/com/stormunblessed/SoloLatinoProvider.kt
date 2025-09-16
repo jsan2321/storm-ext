@@ -1,15 +1,23 @@
 package com.stormunblessed
 
+import android.util.Base64
 import android.util.Log
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.extractors.helper.CryptoJS
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
+import java.nio.ByteBuffer
+import java.security.MessageDigest
+import java.util.Arrays
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class SoloLatinoProvider : MainAPI() {
     override var mainUrl = "https://sololatino.net"
     override var name = "SoloLatino"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasMainPage = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
@@ -20,6 +28,7 @@ class SoloLatinoProvider : MainAPI() {
         TvType.Cartoon,
     )
 
+    @Suppress("DEPRECATION")
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
         val items = ArrayList<HomePageList>()
         val urls = listOf(
@@ -42,13 +51,9 @@ class SoloLatinoProvider : MainAPI() {
                 val title = it.selectFirst("a div.data h3")?.text()
                 val link = it.selectFirst("a")?.attr("href")
                 val img = it.selectFirst("div.poster img.lazyload")?.attr("data-srcset")
-                TvSeriesSearchResponse(
-                    title!!,
-                    link!!,
-                    this.name,
-                    tvType,
-                    img,
-                )
+                newTvSeriesSearchResponse(title!!, link!!, tvType, true){
+                    this.posterUrl = img
+                }
             }
             items.add(HomePageList(name, home))
         }
@@ -62,13 +67,9 @@ class SoloLatinoProvider : MainAPI() {
             val title = it.selectFirst("a div.data h3")?.text()
             val link = it.selectFirst("a")?.attr("href")
             val img = it.selectFirst("div.poster img.lazyload")?.attr("data-srcset")
-            TvSeriesSearchResponse(
-                title!!,
-                link!!,
-                this.name,
-                TvType.TvSeries,
-                img,
-            )
+            newTvSeriesSearchResponse(title!!, link!!, TvType.TvSeries){
+                this.posterUrl = img
+            }
         }
     }
 
@@ -100,13 +101,12 @@ class SoloLatinoProvider : MainAPI() {
                             it.trim().toIntOrNull()
                         }
                     val realimg = it.selectFirst("div.imagen img")?.attr("src")
-                    Episode(
-                        epurl,
-                        epTitle,
-                        seasonEpisodeNumber?.getOrNull(0),
-                        seasonEpisodeNumber?.getOrNull(1),
-                        realimg,
-                    )
+                    newEpisode(epurl){
+                        this.name = epTitle
+                        this.season = seasonEpisodeNumber?.getOrNull(0)
+                        this.episode = seasonEpisodeNumber?.getOrNull(1)
+                        this.posterUrl = realimg
+                    }
                 }
             }
         } else listOf()
@@ -137,6 +137,50 @@ class SoloLatinoProvider : MainAPI() {
         }
     }
 
+    fun decryptLink(encryptedLinkBase64: String, secretKey: String): String? {
+        return try {
+            CryptoJS.decrypt(secretKey, encryptedLinkBase64)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            try {
+                val encryptedData = Base64.decode(encryptedLinkBase64, Base64.DEFAULT)
+                val byteBuffer = ByteBuffer.wrap(encryptedData)
+                val iv = ByteArray(16)
+                byteBuffer.get(iv)
+                val encryptedBytes = ByteArray(byteBuffer.remaining())
+                byteBuffer.get(encryptedBytes)
+                val keyBytes = secretKey.toByteArray(Charsets.UTF_8)
+                val secretKeySpec = SecretKeySpec(keyBytes, "AES")
+                val ivSpec = IvParameterSpec(iv)
+                val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+                cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivSpec)
+                val decryptedBytes = cipher.doFinal(encryptedBytes)
+                String(decryptedBytes, Charsets.UTF_8)
+                    .replace("<", "\\u003c")
+                    .replace(">", "\\u003e")
+                    .replace("\"", "&quot;")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+    }
+
+    suspend fun customLoadExtractor(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit)
+    {
+        loadExtractor(url
+            .replaceFirst("https://hglink.to", "https://streamwish.to")
+            .replaceFirst("https://swdyu.com","https://streamwish.to")
+            .replaceFirst("https://mivalyo.com", "https://vidhidepro.com")
+            .replaceFirst("https://filemoon.link", "https://filemoon.sx")
+            .replaceFirst("https://sblona.com", "https://watchsb.com")
+            , referer, subtitleCallback, callback)
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -145,11 +189,26 @@ class SoloLatinoProvider : MainAPI() {
     ): Boolean {
         val regex = """(go_to_player|go_to_playerVast)\('(.*?)'""".toRegex()
         app.get(data).document.selectFirst("iframe")?.attr("src")?.let { frameUrl ->
-            regex.findAll(app.get(frameUrl).document.html()).map { it.groupValues.get(2) }.toList().apmap {
-                loadExtractor(it, data, subtitleCallback, callback)
+            if (frameUrl.startsWith("https://embed69.org/")) {
+                val linkRegex = """"link":"(.*?)"""".toRegex()
+                val links = app.get(frameUrl).document.select("script")
+                    .firstOrNull { it.html().contains("const dataLink = [") }?.html()
+                    ?.substringAfter("const dataLink = ")
+                    ?.substringBefore(";")?.let {
+                        linkRegex.findAll(it).map { it.groupValues[1] }.map {
+                            decryptLink(it, "Ak7qrvvH4WKYxV2OgaeHAEg2a5eh16vE")
+                        }.filterNotNull().toList()
+                    }?.toList();
+                links?.amap {
+                    customLoadExtractor(it, data, subtitleCallback, callback)
+                }
+            } else {
+                regex.findAll(app.get(frameUrl).document.html()).map { it.groupValues.get(2) }
+                    .toList().apmap {
+                        customLoadExtractor(it, data, subtitleCallback, callback)
+                    }
             }
         }
         return true
     }
-
 }

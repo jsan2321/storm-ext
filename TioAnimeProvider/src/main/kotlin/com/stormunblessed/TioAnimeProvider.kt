@@ -61,15 +61,14 @@ class TioAnimeProvider:MainAPI() {
             val home = doc.select("ul.animes li article").map {
                 val title = it.selectFirst("h3.title")?.text()
                 val poster = it.selectFirst("figure img")?.attr("src")
-                AnimeSearchResponse(
+                newAnimeSearchResponse(
                     title!!,
                     fixUrl(it.selectFirst("a")?.attr("href") ?: ""),
-                    this.name,
                     TvType.Anime,
-                    fixUrl(poster ?: ""),
-                    null,
-                    if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(DubStatus.Dubbed) else EnumSet.of(DubStatus.Subbed),
-                )
+                ){
+                    this.posterUrl = fixUrl(poster ?: "")
+                    this.dubStatus = if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(DubStatus.Dubbed) else EnumSet.of(DubStatus.Subbed)
+                }
             }
 
             items.add(HomePageList(name, home))
@@ -95,15 +94,14 @@ class TioAnimeProvider:MainAPI() {
             val title = searchr.title
             val href = "$mainUrl/anime/${searchr.slug}"
             val image = "$mainUrl/uploads/portadas/${searchr.id}.jpg"
-            AnimeSearchResponse(
+            newAnimeSearchResponse(
                 title,
                 href,
-                this.name,
-                TvType.Anime,
-                fixUrl(image),
-                null,
-                if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(DubStatus.Dubbed) else EnumSet.of(DubStatus.Subbed),
-            )
+                TvType.Anime
+            ){
+                this.posterUrl = fixUrl(image)
+                this.dubStatus = if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(DubStatus.Dubbed) else EnumSet.of(DubStatus.Subbed)
+            }
         }
     }
 
@@ -129,13 +127,12 @@ class TioAnimeProvider:MainAPI() {
                 data.split("],").forEach {
                     it.split(",").forEach { epNum ->
                         val link = url.replace("/anime/","/ver/")+"-$epNum"
-                        episodes.add( Episode(
-                            link,
-                            "Capítulo $epNum",
-                            posterUrl = null,
-                            episode = epNum.toIntOrNull()
-                        )
-                        )
+                        episodes.add( newEpisode(
+                            link
+                        ){
+                            this.name = "Capítulo $epNum"
+                            this.episode = epNum.toIntOrNull()
+                        })
                     }
                 }
             }

@@ -17,7 +17,7 @@ class DoramasFlixProvider:MainAPI() {
 
     override var mainUrl = "https://doramasflix.co"
     override var name = "Doramasflix"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasMainPage = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
@@ -158,13 +158,13 @@ class DoramasFlixProvider:MainAPI() {
         val istvShow = info.isTVShow
         val data = "{\"id\":\"$id\",\"slug\":\"$slug\",\"type\":\"$typename\",\"isTV\":$istvShow}"
 
-        return TvSeriesSearchResponse(
+        return newTvSeriesSearchResponse(
             title!!,
             data,
-            name,
             TvType.AsianDrama,
-            realposter,
-        )
+        ){
+            this.posterUrl = realposter
+        }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -225,13 +225,15 @@ class DoramasFlixProvider:MainAPI() {
                     val epthumb = getImageUrl(it.stillPath)
                     val name = it.name
                     episodes.add(
-                        Episode(
+                        newEpisode(
                             epSlug!!,
-                            name,
-                            season,
-                            epnum,
-                            epthumb
-                        ))
+                        ){
+                            this.name = name
+                            this.season = season
+                            this.episode= epnum
+                            this.posterUrl= epthumb
+
+                        })
                 }
             }
         } else if (isMovie) {

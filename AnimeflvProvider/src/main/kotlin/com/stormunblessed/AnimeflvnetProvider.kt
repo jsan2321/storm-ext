@@ -24,7 +24,7 @@ class AnimeflvnetProvider : MainAPI() {
 
     override var mainUrl = "https://www3.animeflv.net"
     override var name = "Animeflv.net"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasMainPage = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
@@ -145,12 +145,11 @@ class AnimeflvnetProvider : MainAPI() {
                     //val epthumb = "https://cdn.animeflv.net/screenshots/$animeid/$epNum/th_3.jpg"
                     val link = url.replace("/anime/", "/ver/") + "-$epNum"
                     episodes.add(
-                        Episode(
+                        newEpisode(
                             link,
-                            null,
-                            //posterUrl = epthumb,
-                            episode = epNum.toIntOrNull()
-                        )
+                        ){
+                            this.episode = epNum.toIntOrNull()
+                        }
                     )
                 }
             }

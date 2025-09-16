@@ -13,6 +13,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 
 class AnimensionProvider:MainAPI() {
     override var mainUrl = "https://animension.to"
@@ -86,10 +87,11 @@ class AnimensionProvider:MainAPI() {
             val epid = it[1]
             val epnum = it[2]
             val epinfo = "$mainUrl/public-api/episode.php?id=$epid"
-            Episode(
+            newEpisode(
                 epinfo,
-                episode = epnum.toString().toIntOrNull()
-            )
+            ){
+                this.episode = epnum.toString().toIntOrNull()
+            }
         }
         return newAnimeLoadResponse(title, url, TvType.Anime){
             addEpisodes(DubStatus.Subbed, episodes)
@@ -141,14 +143,13 @@ class AnimensionProvider:MainAPI() {
             else if (link.contains(Regex("mp4\$")))
             {
                 callback(
-                    ExtractorLink(
+                    newExtractorLink(
                         this.name,
                         "${this.name} MP4",
                         link,
-                        "",
-                        Qualities.Unknown.value,
-                        isM3u8 = false
-                    )
+                    ){
+                        this.quality = Qualities.Unknown.value
+                    }
                 )
             }
             else {

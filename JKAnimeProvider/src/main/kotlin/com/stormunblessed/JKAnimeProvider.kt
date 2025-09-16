@@ -1,13 +1,19 @@
 package com.stormunblessed
 
 
+import android.util.Log
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.utils.AppUtils
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody
 import java.util.*
 import kotlin.collections.ArrayList
 
@@ -19,6 +25,9 @@ class JKAnimeProvider : MainAPI() {
             else if (t.contains("Pelicula")) TvType.AnimeMovie
             else TvType.Anime
         }
+
+        var latestCookie: Map<String, String> = emptyMap()
+        var latestToken = ""
     }
 
     override var mainUrl = "https://jkanime.net"
@@ -33,60 +42,76 @@ class JKAnimeProvider : MainAPI() {
         TvType.Anime,
     )
 
+    data class MediaItem (
+        val title: String? = null,
+        val synopsis: String? = null,
+        val image: String? = null,
+        val slug: String? = null,
+        val type: String? = null,
+        val url: String? = null,
+    )
+
+    private suspend fun getToken(url: String) {
+        if(latestToken.equals("")){
+            val maintas = app.get(url)
+            val token = maintas.document.selectFirst("html head meta[name=csrf-token]")?.attr("content") ?: ""
+            val cookies = maintas.cookies
+            latestToken = token
+            latestCookie = cookies
+        }
+    }
+
     override suspend fun getMainPage(page: Int, request : MainPageRequest): HomePageResponse {
         val urls = listOf(
             Pair(
-                "$mainUrl/directorio/?filtro=fecha&tipo=TV&estado=1&fecha=none&temporada=none&orden=desc",
+                "$mainUrl/directorio?filtro=popularidad&estado=emision",
                 "En emisión"
             ),
             Pair(
-                "$mainUrl/directorio/animes/",
+                "$mainUrl/directorio?filtro=popularidad&tipo=animes",
                 "Animes"
             ),
             Pair(
-                "$mainUrl/directorio/peliculas/",
+                "$mainUrl/directorio?filtro=popularidad&tipo=peliculas",
                 "Películas"
             ),
         )
 
         val items = ArrayList<HomePageList>()
-        val isHorizontal = true
         items.add(
             HomePageList(
                 "Últimos episodios",
-                app.get(mainUrl).document.select(".listadoanime-home a.bloqq").map {
+                app.get(mainUrl).document.select("div#animes div.row.mode1.autoimage.row-cols-md-3.row-cols-2.row-cols-lg-4 div.mb-4.d-flex.align-items-stretch.mb-3.dir1").map {
                     val title = it.selectFirst("h5")?.text()
                     val dubstat = if (title!!.contains("Latino") || title.contains("Castellano"))
                         DubStatus.Dubbed else DubStatus.Subbed
                     val poster =
-                        it.selectFirst(".anime__sidebar__comment__item__pic img")?.attr("src") ?: ""
+                        it.selectFirst("div.card.ml-2.mr-2 a div.d-thumb img.card-img-top")?.attr("src") ?: ""
                     val epRegex = Regex("/(\\d+)/|/especial/|/ova/")
-                    val url = it.attr("href").replace(epRegex, "")
+                    val url = it.selectFirst("a")?.attr("href")?.replace(epRegex, "")
                     val epNum =
-                        it.selectFirst("h6")?.text()?.replace("Episodio ", "")?.toIntOrNull()
-                    newAnimeSearchResponse(title, url) {
+                        it.selectFirst("div.card.ml-2.mr-2 a div.d-thumb div.badges.badges-top span.badge.badge-primary")?.text()?.replace("Ep ", "")?.toIntOrNull()
+                    newAnimeSearchResponse(title, url!!) {
                         this.posterUrl = poster
                         addDubStatus(dubstat, epNum)
                     }
-                }, isHorizontal)
+                }, true)
         )
-        urls.apmap { (url, name) ->
+        urls.amap { (url, name) ->
             val soup = app.get(url).document
-            val home = soup.select(".g-0").map {
-                val title = it.selectFirst("h5 a")?.text()
-                val poster = it.selectFirst("img")?.attr("src") ?: ""
-                AnimeSearchResponse(
-                    title!!,
-                    fixUrl(it.selectFirst("a")?.attr("href") ?: ""),
-                    this.name,
-                    TvType.Anime,
-                    fixUrl(poster),
-                    null,
-                    if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(
-                        DubStatus.Dubbed
-                    ) else EnumSet.of(DubStatus.Subbed),
-                )
-            }
+            val json = soup.select("script").firstOrNull { it.html().trim().startsWith("var animes = {") }?.html()?.substringAfter("\"data\":[")?.substringBefore("],")
+            val mediaitems = AppUtils.tryParseJson<List<MediaItem>>("[$json]")
+            val home = mediaitems?.map {
+                val title = it.title
+                val poster = it.image
+                newAnimeSearchResponse(
+                    name = title!!,
+                    url = it.url!!,
+                    type = TvType.Anime,
+                ) {
+                    posterUrl = poster
+                }
+            }.orEmpty()
             items.add(HomePageList(name, home))
         }
 
@@ -120,26 +145,20 @@ class JKAnimeProvider : MainAPI() {
      ) */
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val urls = listOf(
-            "$mainUrl/buscar/$query/1/",
-            "$mainUrl/buscar/$query/2/",
-            "$mainUrl/buscar/$query/3/"
-        )
         val search = ArrayList<SearchResponse>()
-        urls.apmap { ss ->
-            val doc = app.get(ss).document
-            doc.select("div.row div.anime__item").mapNotNull {
-                val title = it.selectFirst(".title")?.text() ?: ""
-                val href = it.selectFirst("a")?.attr("href") ?: ""
-                val img = it.selectFirst(".set-bg")?.attr("data-setbg") ?: ""
-                val isDub = title.contains("Latino") || title.contains("Castellano")
-                search.add(
-                    newAnimeSearchResponse(title, href) {
-                        this.posterUrl = fixUrl(img)
-                        addDubStatus(isDub, !isDub)
-                    })
-            }
+        val doc = app.get("$mainUrl/buscar/$query").document
+        doc.select("div.row div.anime__item").mapNotNull {
+            val title = it.selectFirst(".title")?.text() ?: ""
+            val href = it.selectFirst("a")?.attr("href") ?: ""
+            val img = it.selectFirst(".set-bg")?.attr("data-setbg") ?: ""
+            val isDub = title.contains("Latino") || title.contains("Castellano")
+            search.add(
+                newAnimeSearchResponse(title, href) {
+                    this.posterUrl = fixUrl(img)
+                    addDubStatus(isDub, !isDub)
+                })
         }
+
         return search
     }
 
@@ -148,37 +167,58 @@ class JKAnimeProvider : MainAPI() {
         @JsonProperty("title"  ) var title  : String? = null,
         @JsonProperty("image"  ) var image  : String? = null
     )
+
+    data class EpsResponse (
+        @JsonProperty("current_page" ) var currentPage : Int? = null,
+        var data  : List<EpsInfo>? = null,
+        @JsonProperty("next_page_url"  ) var nextPageurl  : String? = null
+    )
+
     override suspend fun load(url: String): LoadResponse {
-        val doc = app.get(url, timeout = 120).document
-        val poster = doc.selectFirst(".set-bg")?.attr("data-setbg")
-        val title = doc.selectFirst(".anime__details__title > h3")?.text()
-        val description = doc.selectFirst(".anime__details__text > p")?.text()
-        val genres = doc.select("div.col-lg-6:nth-child(1) > ul:nth-child(1) > li:nth-child(2) > a")
+        getToken(url)
+        val doc = app.get(url).document
+        val poster = doc.selectFirst(".anime_pic img")?.attr("src")
+        val title = doc.selectFirst(".anime_info h3")?.text()
+        val description = doc.selectFirst("p.scroll")?.text()
+        val genres = doc.select("div.card:nth-child(3) > div:nth-child(1) > ul:nth-child(1) > li:nth-child(2) > a")
             .map { it.text() }
-        val status = when (doc.selectFirst("span.enemision")?.text()) {
-            "En emisión" -> ShowStatus.Ongoing
-            "En emision" -> ShowStatus.Ongoing
-            "Concluido" -> ShowStatus.Completed
-            else -> null
-        }
-        val type = doc.selectFirst("div.col-lg-6.col-md-6 ul li[rel=tipo]")?.text()
-        val animeID = doc.selectFirst("div.ml-2")?.attr("data-anime")?.toInt()
+        val status =
+            when (doc.select("div.card:nth-child(3) > div:nth-child(1) > ul:nth-child(1) > li")
+                .firstOrNull { it.text().trim().contains("Estado") }?.text()
+                ?.substringAfter("Estado:")?.trim()) {
+                "En emisión" -> ShowStatus.Ongoing
+                "En emision" -> ShowStatus.Ongoing
+                "Concluido" -> ShowStatus.Completed
+                else -> null
+            }
+
+        val year = doc.select("div.card:nth-child(3) > div:nth-child(1) > ul:nth-child(1) > li")
+            .firstOrNull { it.text().trim().startsWith("Emitido") }?.text()
+            ?.substringAfterLast("de ")?.toIntOrNull()
+        val type = doc.selectFirst("div.card:nth-child(3) > div:nth-child(1) > ul:nth-child(1) > li:nth-child(1)")?.text()
+        val animeID = doc.selectFirst("div#guardar-anime")?.attr("data-anime")?.toInt()
         val episodes = ArrayList<Episode>()
-        val pags = doc.select("a.numbers").map { it.attr("href").substringAfter("#pag") }
-        pags.apmap { pagnum ->
-            val res = app.get("$mainUrl/ajax/pagination_episodes/$animeID/$pagnum/").text
-            val json = parseJson<ArrayList<EpsInfo>>(res)
-            json.apmap { info ->
+        var finished = false
+        var pagnum = 1
+        do {
+            val headers = mapOf(
+                "Referer" to url
+            )
+            val res = app.post("$mainUrl/ajax/episodes/$animeID/$pagnum/", headers = headers, data= mapOf("_token" to latestToken), cookies = latestCookie).document.body().html()
+            pagnum++
+            val json = AppUtils.tryParseJson<EpsResponse>(res)
+            json?.data?.amap { info ->
                 val imagetest = !info.image.isNullOrBlank()
                 val image = if (imagetest) "https://cdn.jkdesu.com/assets/images/animes/video/image_thumb/${info.image}" else null
                 val link = "${url.removeSuffix("/")}/${info.number}"
-                val ep = Episode(
-                    link,
-                    posterUrl = image
-                )
+                val ep = newEpisode(link){
+                    this.posterUrl = image
+                }
                 episodes.add(ep)
             }
-        }
+            if(json?.nextPageurl.isNullOrEmpty())
+                finished = true
+        }while (finished == false)
 
         return newAnimeLoadResponse(title!!, url, getType(type!!)) {
             posterUrl = poster
@@ -186,6 +226,7 @@ class JKAnimeProvider : MainAPI() {
             showStatus = status
             plot = description
             tags = genres
+            this.year = year
         }
     }
 
@@ -193,7 +234,7 @@ class JKAnimeProvider : MainAPI() {
         @JsonProperty("file") val file: String?
     )
 
-    private fun streamClean(
+    private suspend fun streamClean(
         name: String,
         url: String,
         referer: String,
@@ -202,14 +243,10 @@ class JKAnimeProvider : MainAPI() {
         m3u8: Boolean
     ): Boolean {
         callback(
-            ExtractorLink(
-                name,
-                name,
-                url,
-                referer,
-                getQualityFromName(quality),
-                m3u8
-            )
+            newExtractorLink(name, name, url, ExtractorLinkType.M3U8){
+                this.referer = referer
+                this.quality = getQualityFromName(quality)
+            }
         )
         return true
     }
@@ -224,6 +261,20 @@ class JKAnimeProvider : MainAPI() {
         return linkRegex.findAll(text).map { it.value.trim().removeSurrounding("\"").replace(Regex("(iframe(.class|.src=\")|=\"player_conte\".*src=\"|\".scrolling|\".width)"),"") }.toList()
     }
 
+    suspend fun customLoadExtractor(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit)
+    {
+        loadExtractor(url
+            .replaceFirst("https://hglink.to", "https://streamwish.to")
+            .replaceFirst("https://swdyu.com","https://streamwish.to")
+            .replaceFirst("https://mivalyo.com", "https://vidhidepro.com")
+            .replaceFirst("https://filemoon.link", "https://filemoon.sx")
+            .replaceFirst("https://sblona.com", "https://watchsb.com")
+            , referer, subtitleCallback, callback)
+    }
 
 
     data class ServersEncoded (
@@ -235,26 +286,18 @@ class JKAnimeProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-
-        app.get(data).document.select("script").apmap { script ->
-
-            if (script.data().contains(Regex("slug|remote"))) {
-                val serversRegex = Regex("\\[\\{.*?\"remote\".*?\"\\}\\]")
-                val servers = serversRegex.findAll(script.data()).map { it.value }.toList().first()
-                val serJson = parseJson<ArrayList<ServersEncoded>>(servers)
-                serJson.apmap {
-                    val encodedurl = it.remote
+        val doc = app.get(data).document
+        doc.select("script").firstOrNull{
+            it.html().trim().startsWith("var video = [];")
+        }?.html().let{
+            val json = it?.substringAfter("var servers = [")?.substringBefore("];")
+            val linksencoded = AppUtils.tryParseJson<List<ServersEncoded>>("[$json]")
+            linksencoded?.amap { val encodedurl = it.remote
                     val urlDecoded = base64Decode(encodedurl)
-                    loadExtractor(urlDecoded, mainUrl, subtitleCallback, callback)
-                }
-
-            }
-
-
-            if (script.data().contains("var video = []")) {
-                val videos = script.data().replace("\\/", "/")
-                fetchjkanime(videos).map { it }.toList()
-                fetchjkanime(videos).map {
+                    customLoadExtractor(urlDecoded, mainUrl, subtitleCallback, callback) }
+            val other = it?.substringBefore("if(video[1] !== undefined)")
+            if(!other.isNullOrBlank()){
+                fetchjkanime(other).map {
                     it.replace("$mainUrl/jkfembed.php?u=", "https://embedsito.com/v/")
                         .replace("$mainUrl/jkokru.php?u=", "http://ok.ru/videoembed/")
                         .replace("$mainUrl/jkvmixdrop.php?u=", "https://mixdrop.co/e/")
@@ -266,9 +309,9 @@ class JKAnimeProvider : MainAPI() {
                         .replace("/um2.php?","$mainUrl/um2.php?")
                         .replace("/um.php?","$mainUrl/um.php?")
                         .replace("=\"player_conte\" src=", "")
-                }.apmap { link ->
+                }.amap { link ->
                     fetchUrls(link).forEach {links ->
-                        loadExtractor(links, data, subtitleCallback, callback)
+                        customLoadExtractor(links, data, subtitleCallback, callback)
                         if (links.contains("um2.php")) {
                             val doc = app.get(links, referer = data).document
                             val gsplaykey = doc.select("form input[value]").attr("value")
@@ -333,8 +376,8 @@ class JKAnimeProvider : MainAPI() {
                                     }
                             }
                         }
-                        if (links.contains("um.php")) {
-                            val desutext = app.get(links, referer = data).text
+                        if (links.contains("/um")) {
+                            val desutext = app.get(links, referer = data).document.body().html()
                             val desuRegex = Regex("((https:|http:)//.*\\.m3u8)")
                             val file = desuRegex.find(desutext)?.value
                             val namedesu = "Desu"
@@ -358,7 +401,7 @@ class JKAnimeProvider : MainAPI() {
                                 links,
                                 referer = data,
                                 allowRedirects = false
-                            ).okhttpResponse.headers.values("location").apmap { xtremeurl ->
+                            ).okhttpResponse.headers.values("location").amap { xtremeurl ->
                                 val namex = "Xtreme S"
                                 streamClean(
                                     namex,
@@ -373,9 +416,7 @@ class JKAnimeProvider : MainAPI() {
                     }
                 }
             }
-
         }
-
         return true
     }
 }

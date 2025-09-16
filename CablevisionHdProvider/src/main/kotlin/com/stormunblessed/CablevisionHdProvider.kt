@@ -4,14 +4,14 @@ import android.util.Base64
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.JsUnpacker
-import com.lagradost.cloudstream3.utils.getQualityFromName
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import java.net.URL
 
 class CablevisionHdProvider : MainAPI() {
 
     override var mainUrl = "https://www.cablevisionhd.com"
     override var name = "CablevisionHd"
-    override var lang = "es"
+    override var lang = "mx"
 
     override val hasQuickSearch = false
     override val hasMainPage = true
@@ -39,7 +39,7 @@ class CablevisionHdProvider : MainAPI() {
         return decodedString
     }
 
-    val nowAllowed = setOf("Únete al chat", "Donar con Paypal", "Lizard Premium")
+    val nowAllowed = setOf("Únete al chat", "Donar con Paypal", "Lizard Premium", "Vuelvete Premium (No ADS)", "Únete a Whatsapp", "Únete a Telegram", "¿Nos invitas el cafe?")
 
     val deportesCat = setOf(
             "TUDN",
@@ -176,49 +176,49 @@ class CablevisionHdProvider : MainAPI() {
         )
         urls.apmap { (name, url) ->
             val doc = app.get(url).document
-            val home = doc.select("div.page-scroll div#page_container.page-container.bg-move-effect div div#canales.row div.canal-item.col-6.col-xs-6.col-sm-6.col-md-3.col-lg-3").filterNot { element ->
-                val text = element.selectFirst("div.lm-canal.lm-info-block.gray-default a h4")?.text()
+            val home = doc.select("div.p-2").filterNot { element ->
+                val text = element.selectFirst("p.des")?.text()
                         ?: ""
                 nowAllowed.any {
                     text.contains(it, ignoreCase = true)
                 } || text.isBlank()
             }.filter {
-                val text = it.selectFirst("div.lm-canal.lm-info-block.gray-default a h4")?.text()?.trim()
+                val text = it.selectFirst("p.des")?.text()?.trim()
                         ?: ""
                 when (name) {
                     "Deportes" -> {
                         deportesCat.any {
-                            text.equals(it, ignoreCase = true)
+                            text.contains(it, ignoreCase = true)
                         }
                     }
 
                     "Entretenimiento" -> {
                         entretenimientoCat.any {
-                            text.equals(it, ignoreCase = true)
+                            text.contains(it, ignoreCase = true)
                         }
                     }
 
                     "Noticias" -> {
                         noticiasCat.any {
-                            text.equals(it, ignoreCase = true)
+                            text.contains(it, ignoreCase = true)
                         }
                     }
 
                     "Peliculas" -> {
                         peliculasCat.any {
-                            text.equals(it, ignoreCase = true)
+                            text.contains(it, ignoreCase = true)
                         }
                     }
 
                     "Infantil" -> {
                         infantilCat.any {
-                            text.equals(it, ignoreCase = true)
+                            text.contains(it, ignoreCase = true)
                         }
                     }
 
                     "Educacion" -> {
                         educacionCat.any {
-                            text.equals(it, ignoreCase = true)
+                            text.contains(it, ignoreCase = true)
                         }
                     }
 
@@ -232,21 +232,19 @@ class CablevisionHdProvider : MainAPI() {
                     else -> true
                 }
             }.map {
-                val title = it.selectFirst("div.lm-canal.lm-info-block.gray-default a h4")?.text()
+                val title = it.selectFirst("p.des")?.text()
                         ?: ""
-                val img = it.selectFirst("div.lm-canal.lm-info-block.gray-default a div.container-image img")?.attr("src")
+                val img = it.selectFirst("a img.w-28")?.attr("src")
                         ?: ""
-                val link = it.selectFirst("div.lm-canal.lm-info-block.gray-default a")?.attr("href")
+                val link = it.selectFirst("a")?.attr("href")
                         ?: ""
-                LiveSearchResponse(
+                newLiveSearchResponse(
                         title,
                         link,
-                        this.name,
                         TvType.Live,
-                        fixUrl(img),
-                        null,
-                        null,
-                )
+                ){
+                    this.posterUrl = fixUrl(img)
+                }
             }
             items.add(HomePageList(name, home, true))
         }
@@ -257,31 +255,29 @@ class CablevisionHdProvider : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val url = mainUrl
         val doc = app.get(url).document
-        return doc.select("div.page-scroll div#page_container.page-container.bg-move-effect div div#canales.row div.canal-item.col-6.col-xs-6.col-sm-6.col-md-3.col-lg-3").filterNot { element ->
-            val text = element.selectFirst("div.lm-canal.lm-info-block.gray-default a h4")?.text()
+        return doc.select("div.p-2").filterNot { element ->
+            val text = element.selectFirst("p.des")?.text()
                     ?: ""
             nowAllowed.any {
                 text.contains(it, ignoreCase = true)
             } || text.isBlank()
         }.filter { element ->
-            element.selectFirst("div.lm-canal.lm-info-block.gray-default a h4")?.text()?.contains(query, ignoreCase = true)
+            element.selectFirst("p.des")?.text()?.contains(query, ignoreCase = true)
                     ?: false
         }.map {
-            val title = it.selectFirst("div.lm-canal.lm-info-block.gray-default a h4")?.text()
+            val title = it.selectFirst("p.des")?.text()
                     ?: ""
-            val img = it.selectFirst("div.lm-canal.lm-info-block.gray-default a div.container-image img")?.attr("src")
+            val img = it.selectFirst("a img.w-28")?.attr("src")
                     ?: ""
-            val link = it.selectFirst("div.lm-canal.lm-info-block.gray-default a")?.attr("href")
+            val link = it.selectFirst("a")?.attr("href")
                     ?: ""
-            LiveSearchResponse(
+            newLiveSearchResponse(
                     title,
                     link,
-                    this.name,
                     TvType.Live,
-                    fixUrl(img),
-                    null,
-                    null,
-            )
+            ){
+                this.posterUrl = fixUrl(img)
+            }
         }
     }
 
@@ -312,7 +308,7 @@ class CablevisionHdProvider : MainAPI() {
             subtitleCallback: (SubtitleFile) -> Unit,
             callback: (ExtractorLink) -> Unit
     ): Boolean {
-        app.get(data).document.select("a.btn.btn-md").map {
+        app.get(data).document.select("a.btn.btn-md").amap {
             val trembedlink = it.attr("href")
             if (trembedlink.contains("/stream")) {
                 val tremrequest = app.get(trembedlink, headers = mapOf(
@@ -341,23 +337,37 @@ class CablevisionHdProvider : MainAPI() {
                         "Sec-Fetch-Mode" to "navigate",
                         "Sec-Fetch-Site" to "cross-site",
                 )).document
-                val scriptPacked = tremrequest2.select("script").find { it.html().contains("function(p,a,c,k,e,d)") }?.html()
-                val script = JsUnpacker(scriptPacked)
-                if (script.detect()) {
-                    val regex = """MARIOCSCryptOld\("(.*?)"\)""".toRegex()
-                    val match = regex.find(script.unpack() ?: "")
-                    val hash = match?.groupValues?.get(1) ?: ""
-                    val extractedurl = decodeBase64UntilUnchanged(hash)
-                    if (extractedurl.isNotBlank()) {
-                        callback(
-                                ExtractorLink(
+                val scriptPacked = tremrequest2.select("script").firstOrNull { it.html().contains("function(p,a,c,k,e,d)") }?.html()
+                if(!scriptPacked.isNullOrEmpty()){
+                    val script = JsUnpacker(scriptPacked)
+                    if (script.detect()) {
+                        val regex = """MARIOCSCryptOld\("(.*?)"\)""".toRegex()
+                        val match = regex.find(script.unpack() ?: "")
+                        val hash = match?.groupValues?.get(1) ?: ""
+                        val extractedurl = decodeBase64UntilUnchanged(hash)
+                        if (extractedurl.isNotBlank()) {
+                            callback(
+                                newExtractorLink(
                                         it.text() ?: getHostUrl(extractedurl),
                                         it.text() ?: getHostUrl(extractedurl),
                                         extractedurl,
-                                        "${getBaseUrl(extractedurl)}/",
-                                        getQualityFromName(""),
-                                        extractedurl.contains("m3u8")
                                 )
+                            )
+                        }
+                    }
+                }else{
+                    val scriptPacked2 = tremrequest2.select("script").firstOrNull { it.html().trim().startsWith("jwplayer.key = '") }?.html()
+                    if(!scriptPacked2.isNullOrEmpty()){
+                        var url = scriptPacked2.substringAfter("setupPlayer(\"").substringBefore("\");")
+                        if(!url.startsWith("http"))
+                            url = scriptPacked2.substringAfter("const url = \"").substringBefore("\";")
+                        loadLinks(url, false, subtitleCallback, callback)
+                        callback(
+                            newExtractorLink(
+                                    it.text() ?: getHostUrl(url),
+                                    it.text() ?: getHostUrl(url),
+                                    url,
+                            )
                         )
                     }
                 }

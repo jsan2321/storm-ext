@@ -9,7 +9,7 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 class PlayhubProvider:MainAPI() {
     override var mainUrl = "https://playhublite.com"
     override var name = "Playhub"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasQuickSearch = false
     override val hasMainPage = true
     override val hasChromecastSupport = true
@@ -80,13 +80,13 @@ class PlayhubProvider:MainAPI() {
                 val data = if (type == "serie") "${mainUrl}/series/$id" else if (type == "movie") "$mainUrl/movies/$id" else if (!airdate) "${mainUrl}/series/$id"
                 else if (airdate) "$mainUrl/movies/$id"
                 else ""
-                TvSeriesSearchResponse(
+                newTvSeriesSearchResponse(
                     title,
                     data,
-                    this.name,
                     TvType.TvSeries,
-                    poster,
-                )
+                ){
+                    this.posterUrl = poster
+                }
             }
             items.add(HomePageList(name, home!!))
         }

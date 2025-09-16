@@ -8,12 +8,13 @@ import com.lagradost.cloudstream3.utils.getQualityFromName
 import org.jsoup.Jsoup
 import java.util.*
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 
 
 class PelisplusSOProvider : MainAPI() {
     override var mainUrl = "https://pelisplusgo.vip"
     override var name = "Pelisplus.so"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasMainPage = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
@@ -30,15 +31,14 @@ class PelisplusSOProvider : MainAPI() {
         argamap({
             items.add(HomePageList("Estrenos", app.get(mainUrl).document.select("div#owl-demo-premiere-movies .pull-left").map{
                                         val title = it.selectFirst("p")?.text() ?: ""
-                                        TvSeriesSearchResponse(
+                                        newTvSeriesSearchResponse(
                                                 title,
                                                 fixUrl(it.selectFirst("a")?.attr("href") ?: ""),
-                                                this.name,
                                                 TvType.Movie,
-                                                it.selectFirst("img")?.attr("src"),
-                                                it.selectFirst("span.year").toString().toIntOrNull(),
-                                                null,
-                                        )
+                                        ){
+                                            this.posterUrl = it.selectFirst("img")?.attr("src")
+                                            this.year = it.selectFirst("span.year").toString().toIntOrNull()
+                                        }
             }))
 
             urls.apmap { (url, name) ->
@@ -46,15 +46,14 @@ class PelisplusSOProvider : MainAPI() {
                 val home = soup.select(".main-peliculas div.item-pelicula").map {
                     val title = it.selectFirst(".item-detail p")?.text() ?: ""
                     val titleRegex = Regex("(\\d+)x(\\d+)")
-                    TvSeriesSearchResponse(
+                    newTvSeriesSearchResponse(
                         title.replace(titleRegex,""),
                             fixUrl(it.selectFirst("a")?.attr("href") ?: ""),
-                            this.name,
-                            TvType.Movie,
-                            it.selectFirst("img")?.attr("src"),
-                            it.selectFirst("span.year").toString().toIntOrNull(),
-                            null,
-                    )
+                            TvType.Movie
+                    ){
+                        this.posterUrl = it.selectFirst("img")?.attr("src")
+                        this.year = it.selectFirst("span.year").toString().toIntOrNull()
+                    }
                 }
 
                 items.add(HomePageList(name, home))
@@ -93,24 +92,23 @@ class PelisplusSOProvider : MainAPI() {
             val isMovie = href.contains("/pelicula/")
 
             if (isMovie) {
-                MovieSearchResponse(
+                newMovieSearchResponse(
                         title,
                         href,
-                        this.name,
                         TvType.Movie,
-                        image,
-                        year
-                )
+                ){
+                    this.posterUrl = image
+                    this.year = year
+                }
             } else {
-                TvSeriesSearchResponse(
+                newTvSeriesSearchResponse(
                         title,
                         href,
-                        this.name,
-                        TvType.TvSeries,
-                        image,
-                        year,
-                        null
-                )
+                        TvType.TvSeries
+                ){
+                    this.posterUrl = image
+                    this.year = year
+                }
             }
         }
     }
@@ -130,13 +128,13 @@ class PelisplusSOProvider : MainAPI() {
             val isValid = seasonid.size == 2
             val episode = if (isValid) seasonid.getOrNull(1) else null
             val season = if (isValid) seasonid.getOrNull(0) else null
-            Episode(
+            newEpisode(
                     href,
-                    epTitle,
-                    season = season,
-                    episode = episode,
-
-                    )
+                    ){
+                this.name = epTitle
+                this.season = season
+                this.episode = episode
+            }
         }.reversed()
 
         val year = Regex("(\\d*)").find(soup.select(".info-half").text())
@@ -149,35 +147,32 @@ class PelisplusSOProvider : MainAPI() {
 
         return when (tvType) {
             TvType.TvSeries -> {
-                TvSeriesLoadResponse(
+                newTvSeriesLoadResponse(
                         title,
                         url,
-                        this.name,
                         tvType,
-                        episodes,
-                        poster,
-                        year.toString().toIntOrNull(),
-                        description,
-                        ShowStatus.Ongoing,
-                        null,
-                        tags,
-                )
+                        episodes
+                ){
+                    this.posterUrl = poster
+                    this.year = year.toString().toIntOrNull()
+                    this.plot = description
+                    this.showStatus = ShowStatus.Ongoing
+                    this.tags = tags
+                }
             }
             TvType.Movie -> {
-                MovieLoadResponse(
+                newMovieLoadResponse(
                         title,
                         url,
-                        this.name,
                         tvType,
                         url,
-                        poster,
-                        year.toString().toIntOrNull(),
-                        description,
-                        null,
-                        tags,
-                        duration.toString().toIntOrNull(),
-
-                        )
+                        ){
+                    this.posterUrl = poster
+                    this.year = year.toString().toIntOrNull()
+                    this.plot = description
+                    this.tags = tags
+                    this.duration = duration.toString().toIntOrNull()
+                }
             }
             else -> null
         }
@@ -197,14 +192,13 @@ class PelisplusSOProvider : MainAPI() {
                 mainUrl,
         ).apmap {
             callback(
-                    ExtractorLink(
-                            name,
-                            "$name $lang",
-                            it.url,
-                            mainUrl,
-                            getQualityFromName(it.quality.toString()),
-                            true
-                    )
+                newExtractorLink(
+                        name,
+                        "$name $lang",
+                        it.url,
+                ){
+                    this.quality = getQualityFromName(it.quality.toString())
+                }
             )
         }
         return true

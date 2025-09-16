@@ -8,7 +8,7 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 class PelispediaProvider:MainAPI() {
     override var mainUrl = "https://pelispedia.is"
     override var name = "Pelispedia"
-    override var lang = "es"
+    override var lang = "mx"
 
     override val hasQuickSearch = false
     override val hasMainPage = true
@@ -29,17 +29,15 @@ class PelispediaProvider:MainAPI() {
             val doc = app.get(url).document
             val home =  doc.select("section.movies article").map {
                 val title = it.selectFirst("h2.entry-title")?.text() ?: ""
-                val img = it.selectFirst("img")?.attr("src") ?: ""
+                val img = it.selectFirst("div.post-thumbnail figure img")?.attr("data-src")?.replaceFirst("//", "https://") ?: ""
                 val link = it.selectFirst("a.lnk-blk")?.attr("href") ?: ""
-                TvSeriesSearchResponse(
+                newTvSeriesSearchResponse(
                     title,
                     link,
-                    this.name,
                     TvType.Movie,
-                    fixUrl(img),
-                    null,
-                    null,
-                )
+                ){
+                    this.posterUrl = fixUrl(img)
+                }
             }
             items.add(HomePageList(name, home))
         }
@@ -54,23 +52,21 @@ class PelispediaProvider:MainAPI() {
             val title = it.selectFirst("h2.entry-title")?.text() ?: ""
             val img = it.selectFirst("img")!!.attr("src")
             val link = it.selectFirst("a.lnk-blk")!!.attr("href")
-            TvSeriesSearchResponse(
+            newTvSeriesSearchResponse(
                 title,
                 link,
-                this.name,
                 TvType.Movie,
-                fixUrl(img),
-                null,
-                null,
-            )
+            ){
+                this.posterUrl = fixUrl(img)
+            }
         }
     }
 
     override suspend fun load(url: String): LoadResponse? {
         val doc = app.get(url).document
         val tvType = if (url.contains("pelicula")) TvType.Movie else TvType.TvSeries
-        val poster = doc.selectFirst(".alg-ss img")?.attr("src")?.replace(Regex("\\/p\\/w\\d+.*\\/"),"/p/original/") ?: ""
-        val backimage = doc.selectFirst(".bghd  img")?.attr("src")?.replace(Regex("\\/p\\/w\\d+.*\\/"),"/p/original/") ?: poster
+        val poster = doc.selectFirst("article.post div.post-thumbnail figure img")?.attr("data-src")?.replaceFirst("//", "https://") ?: ""
+        val backimage = doc.selectFirst("div#aa-wp div.bghd img.TPostBg")?.attr("data-src")?.replaceFirst("//", "https://") ?: poster
         val title = doc.selectFirst("h1.entry-title")?.text() ?: ""
         val plot = doc.selectFirst(".description > p:nth-child(2)")?.text() ?: doc.selectFirst(".description > p")?.text()
         val tags = doc.select("span.genres a").map { it.text() }
@@ -101,12 +97,12 @@ class PelispediaProvider:MainAPI() {
                 val isValid = seasonid.size == 2
                 val episode = if (isValid) seasonid.getOrNull(1) else null
                 val season = if (isValid) seasonid.getOrNull(0) else null
-                epi.add(Episode(
+                epi.add(newEpisode(
                     href,
-                    null,
-                    season,
-                    episode,
-                ))
+                ){
+                    this.episode = episode
+                    this.season = season
+                })
             }
         }
 

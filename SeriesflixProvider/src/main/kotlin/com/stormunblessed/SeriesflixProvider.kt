@@ -32,15 +32,13 @@ class SeriesflixProvider : MainAPI() {
                 val link = it.selectFirst("a")!!.attr("href")
                 val img = it.selectFirst("img")!!.attr("data-src").replace("//tmdbcdn2.online","https://tmdbcdn2.online").replace(".webp",".jpg")
                 println("IMG $img")
-                TvSeriesSearchResponse(
+                newTvSeriesSearchResponse(
                     title,
                     link,
-                    this.name,
                     TvType.Movie,
-                    img,
-                    null,
-                    null,
-                )
+                ){
+                    this.posterUrl = img
+                }
             }
 
             items.add(HomePageList(name, home))
@@ -58,24 +56,21 @@ class SeriesflixProvider : MainAPI() {
             val name = it.selectFirst("h2.title")!!.text()
             val isMovie = href.contains("/movies/")
             if (isMovie) {
-                MovieSearchResponse(
+                newMovieSearchResponse(
                     name,
                     href,
-                    this.name,
                     TvType.Movie,
-                    poster,
-                    null
-                )
+                ){
+                    this.posterUrl = poster
+                }
             } else {
-                TvSeriesSearchResponse(
+                newTvSeriesSearchResponse(
                     name,
                     href,
-                    this.name,
                     TvType.TvSeries,
-                    poster,
-                    null,
-                    null
-                )
+                ){
+                    this.posterUrl = poster
+                }
             }
         }.toList()
     }
@@ -146,18 +141,17 @@ class SeriesflixProvider : MainAPI() {
                     }
                 }
             }
-            return TvSeriesLoadResponse(
+        return newTvSeriesLoadResponse(
                 title,
                 url,
-                this.name,
                 type,
-                episodeList,
-                fixUrlNull(poster),
-                year?.toIntOrNull(),
-                descipt,
-                null,
-                rating
-            )
+                episodeList
+            ){
+                this.posterUrl = fixUrlNull(poster)
+                this.year = year?.toIntOrNull()
+                this.plot = descipt
+                this.rating = rating
+            }
         } else {
             return newMovieLoadResponse(
                 title,

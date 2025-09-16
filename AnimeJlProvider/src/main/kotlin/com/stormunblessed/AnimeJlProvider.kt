@@ -9,7 +9,7 @@ import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 class AnimeJlProvider : MainAPI() {
     override var mainUrl = "https://www.anime-jl.net"
     override var name = "AnimeJL"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasMainPage = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
@@ -34,13 +34,13 @@ class AnimeJlProvider : MainAPI() {
                 val link = it.selectFirst("article.Anime a")?.attr("href")
                 val img = it.selectFirst("article.Anime a div.Image figure img")?.attr("src")
                     ?.replaceFirst("^/".toRegex(), "$mainUrl/")
-                TvSeriesSearchResponse(
+                newTvSeriesSearchResponse(
                     title!!,
                     link!!,
-                    this.name,
                     TvType.Anime,
-                    img,
-                )
+                ){
+                    this.posterUrl = img
+                }
             }
             items.add(HomePageList(name, home))
         }
@@ -55,13 +55,13 @@ class AnimeJlProvider : MainAPI() {
             val link = it.selectFirst("article.Anime a")?.attr("href")
             val img = it.selectFirst("article.Anime a div.Image figure img")?.attr("src")
                 ?.replaceFirst("^/".toRegex(), "$mainUrl/")
-            TvSeriesSearchResponse(
+            newTvSeriesSearchResponse(
                 title!!,
                 link!!,
-                this.name,
                 TvType.Anime,
-                img,
-            )
+            ){
+                this.posterUrl = img
+            }
         }
     }
 
@@ -99,13 +99,14 @@ class AnimeJlProvider : MainAPI() {
                     }
                 }
                 episodes.add(
-                    Episode(
+                    newEpisode(
                         epurl,
-                        epTitle,
-                        0,
-                        epNum,
-                        realimg,
-                    )
+                    ){
+                        this.name = epTitle
+                        this.season = 0
+                        this.episode = epNum
+                        this.posterUrl = realimg
+                    }
                 )
             }
         }

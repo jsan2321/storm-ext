@@ -120,15 +120,14 @@ class ComamosRamenProvider : MainAPI() {
             val title = it.title
             val img = "https://img.comamosramen.com/${it.img?.vertical}-high.jpg"
             val link = "$mainUrl/v/${it.Id}/${title.replace(" ", "-")}"
-            AnimeSearchResponse(
+            newAnimeSearchResponse(
                 title,
                 link,
-                this.name,
                 TvType.AsianDrama,
-                img,
-                null,
-                if (title.contains("Latino")) EnumSet.of(DubStatus.Dubbed) else EnumSet.of(DubStatus.Subbed),
-            )
+            ){
+                this.posterUrl = img
+                this.dubStatus = if (title.contains("Latino")) EnumSet.of(DubStatus.Dubbed) else EnumSet.of(DubStatus.Subbed)
+            }
         }
     }
 
@@ -226,26 +225,26 @@ class ComamosRamenProvider : MainAPI() {
             val seasonID = seasons.season
             seasons.episodes.map { episodes ->
                 val epnum = episodes.episode
-                epi.add(Episode(
+                epi.add(newEpisode(
                     "$mainUrl/v/$movieID/${title?.replace(" ","-")}/$seasonID-$epnum",
-                    season =seasonID,
-                    episode = epnum,
-                ))
+                ){
+                    this.season = seasonID
+                    this.episode = epnum
+                })
             }
         }
-        return TvSeriesLoadResponse(
+        return newTvSeriesLoadResponse(
             title!!,
             url,
-            this.name,
             TvType.AsianDrama,
             epi,
-            img,
-            year,
-            desc,
-            status,
-            null,
-            tags
-        )
+        ){
+            this.posterUrl = img
+            this.year = year
+            this.plot = desc
+            this.showStatus = status
+            this.tags = tags
+        }
     }
 
     data class LoadLinksMain (

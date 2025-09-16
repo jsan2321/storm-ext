@@ -159,16 +159,14 @@ open class BflixProvider : MainAPI() {
                 val link = fixUrl(it.selectFirst("a")!!.attr("href"))
                 val qualityInfo = it.selectFirst("div.quality")!!.text()
                 val quality = getQualityFromString(qualityInfo)
-                TvSeriesSearchResponse(
+                newTvSeriesSearchResponse(
                     title,
                     link,
-                    this.name,
                     if (link.contains("/movie/")) TvType.Movie else TvType.TvSeries,
-                    it.selectFirst("a.film-poster img")!!.attr("data-src"),
-                    null,
-                    null,
-                    quality = quality
-                )
+                ){
+                    this.posterUrl = it.selectFirst("a.film-poster img")!!.attr("data-src")
+                    this.quality = quality
+                }
             }
             items.add(HomePageList(name, test))
         }
@@ -211,26 +209,23 @@ override suspend fun search(query: String): List<SearchResponse>? {
         val quality = getQualityFromString(qualityInfo)
 
         if (isMovie) {
-            MovieSearchResponse(
+            newMovieSearchResponse(
                 title,
                 href,
-                this.name,
                 TvType.Movie,
-                image,
-                null,
-                quality = quality
-            )
+            ){
+                this.posterUrl = image
+                this.quality = quality
+            }
         } else {
-            TvSeriesSearchResponse(
+            newTvSeriesSearchResponse(
                 title,
                 href,
-                this.name,
                 TvType.TvSeries,
-                image,
-                null,
-                null,
-                quality = quality
-            )
+            ){
+                this.posterUrl = image
+                this.quality = quality
+            }
         }
     }
 }

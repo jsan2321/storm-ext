@@ -8,7 +8,7 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 class Pelisplus4KProvider :MainAPI() {
     override var mainUrl = "https://ww3.pelisplus.to"
     override var name = "Pelisplus4K"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasMainPage = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
@@ -34,13 +34,9 @@ class Pelisplus4KProvider :MainAPI() {
                 val title = it.selectFirst("a h2")?.text()
                 val link = it.selectFirst("a.itemA")?.attr("href")
                 val img = it.selectFirst("picture img")?.attr("data-src")
-                TvSeriesSearchResponse(
-                    title!!,
-                    link!!,
-                    this.name,
-                    TvType.TvSeries,
-                    img,
-                )
+                newTvSeriesSearchResponse(title!!, link!!, TvType.TvSeries){
+                    this.posterUrl = img
+                }
             }
             items.add(HomePageList(name, home))
         }
@@ -54,13 +50,9 @@ class Pelisplus4KProvider :MainAPI() {
             val title = it.selectFirst("a h2")?.text()
             val link = it.selectFirst("a.itemA")?.attr("href")
             val img = it.selectFirst("picture img")?.attr("data-src")
-            TvSeriesSearchResponse(
-                title!!,
-                link!!,
-                this.name,
-                TvType.TvSeries,
-                img,
-            )
+            newTvSeriesSearchResponse(title!!, link!!, TvType.TvSeries){
+                this.posterUrl = img
+            }
         }
     }
 
@@ -94,13 +86,13 @@ class Pelisplus4KProvider :MainAPI() {
                         val realimg = if (img == null) null else if (img.isEmpty() == true) null else "https://image.tmdb.org/t/p/w342${img.replace("\\/", "/")}"
                         val epurl = "$url/season/$seasonNum/episode/$epNum"
                         epi.add(
-                            Episode(
-                                epurl,
-                                epTitle,
-                                seasonNum,
-                                epNum,
-                                realimg,
-                            ))
+                            newEpisode(epurl){
+                                this.name = epTitle
+                                this.season = seasonNum
+                                this.episode = epNum
+                                this.posterUrl = realimg
+                            }
+                        )
                     }
                 }
             }
@@ -129,6 +121,21 @@ class Pelisplus4KProvider :MainAPI() {
         }
     }
 
+    suspend fun customLoadExtractor(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit)
+    {
+        loadExtractor(url
+            .replaceFirst("https://hglink.to", "https://streamwish.to")
+            .replaceFirst("https://swdyu.com","https://streamwish.to")
+            .replaceFirst("https://mivalyo.com", "https://vidhidepro.com")
+            .replaceFirst("https://filemoon.link", "https://filemoon.sx")
+            .replaceFirst("https://sblona.com", "https://watchsb.com")
+            , referer, subtitleCallback, callback)
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -142,8 +149,8 @@ class Pelisplus4KProvider :MainAPI() {
             val linkRegex = Regex("window\\.location\\.href\\s*=\\s*'(.*)'")
             val text = app.get("$mainUrl/player/$encodedTwo").text
             val link = linkRegex.find(text)?.destructured?.component1()
-            if (link != null) {
-                loadExtractor(link, mainUrl, subtitleCallback, callback)
+            if (!link.isNullOrBlank()) {
+                customLoadExtractor(link, mainUrl, subtitleCallback, callback)
             }
         }
         return true

@@ -8,7 +8,7 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 class CinecalidadProvider : MainAPI() {
     override var mainUrl = "https://www.cinecalidad.ec"
     override var name = "Cinecalidad"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasMainPage = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
@@ -34,15 +34,13 @@ class CinecalidadProvider : MainAPI() {
         val home = soup.select(".item.movies").map {
             val title = it.selectFirst("div.in_title")!!.text()
             val link = it.selectFirst("a")!!.attr("href")
-            TvSeriesSearchResponse(
+            newTvSeriesSearchResponse(
                 title,
                 link,
-                this.name,
                 if (link.contains("/ver-pelicula/")) TvType.Movie else TvType.TvSeries,
-                it.selectFirst(".poster.custom img")!!.attr("data-src"),
-                null,
-                null,
-            )
+            ){
+                this.posterUrl = it.selectFirst(".poster.custom img")!!.attr("data-src")
+            }
         }
 
         return newHomePageResponse(request.name, home)
@@ -59,24 +57,21 @@ class CinecalidadProvider : MainAPI() {
             val isMovie = href.contains("/ver-pelicula/")
 
             if (isMovie) {
-                MovieSearchResponse(
+                newMovieSearchResponse(
                     title,
                     href,
-                    this.name,
                     TvType.Movie,
-                    image,
-                    null
-                )
+                ){
+                    this.posterUrl = image
+                }
             } else {
-                TvSeriesSearchResponse(
+                newTvSeriesSearchResponse(
                     title,
                     href,
-                    this.name,
                     TvType.TvSeries,
-                    image,
-                    null,
-                    null
-                )
+                ){
+                    this.posterUrl = image
+                }
             }
         }
     }
@@ -99,39 +94,39 @@ class CinecalidadProvider : MainAPI() {
             val isValid = seasonid.size == 2
             val episode = if (isValid) seasonid.getOrNull(1) else null
             val season = if (isValid) seasonid.getOrNull(0) else null
-            Episode(
+            newEpisode(
                 href,
-                name,
-                season,
-                episode,
-                if (epThumb.contains("svg")) null else epThumb
-            )
+            ){
+                this.name = name
+                this.season = season
+                this.episode= episode
+                this.posterUrl = if (epThumb.contains("svg")) null else epThumb
+
+            }
         }
         return when (val tvType =
             if (url.contains("/ver-pelicula/")) TvType.Movie else TvType.TvSeries) {
             TvType.TvSeries -> {
-                TvSeriesLoadResponse(
+                newTvSeriesLoadResponse(
                     title,
                     url,
-                    this.name,
                     tvType,
                     episodes,
-                    poster,
-                    null,
-                    description,
-                )
+                ){
+                    this.posterUrl = poster
+                    this.plot = description
+                }
             }
             TvType.Movie -> {
-                MovieLoadResponse(
+                newMovieLoadResponse(
                     title,
                     url,
-                    this.name,
                     tvType,
-                    url,
-                    poster,
-                    null,
-                    description,
-                )
+                    url
+                ){
+                    this.posterUrl = poster
+                    this.plot = description
+                }
             }
             else -> null
         }

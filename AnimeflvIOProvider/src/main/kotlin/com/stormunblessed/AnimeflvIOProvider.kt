@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import java.util.*
 
 class AnimeflvIOProvider:MainAPI() {
@@ -30,30 +31,30 @@ class AnimeflvIOProvider:MainAPI() {
         )
         items.add(HomePageList("Estrenos", app.get(mainUrl).document.select("div#owl-demo-premiere-movies .pull-left").map{
             val title = it.selectFirst("p")?.text() ?: ""
-            AnimeSearchResponse(
-                title,
-                fixUrl(it.selectFirst("a")?.attr("href") ?: ""),
-                this.name,
-                TvType.Anime,
-                it.selectFirst("img")?.attr("src"),
-                it.selectFirst("span.year").toString().toIntOrNull(),
-                EnumSet.of(DubStatus.Subbed),
-            )
+            newAnimeSearchResponse(
+                            title,
+                            fixUrl(it.selectFirst("a")?.attr("href") ?: ""),
+                            TvType.Anime
+                        ){
+                this.posterUrl = it.selectFirst("img")?.attr("src")
+                this.year = it.selectFirst("span.year").toString().toIntOrNull()
+                this.dubStatus = EnumSet.of(DubStatus.Subbed)
+
+            }
         }))
         urls.apmap { (url, name) ->
             val soup = app.get(url).document
             val home = soup.select("div.item-pelicula").map {
                 val title = it.selectFirst(".item-detail p")?.text() ?: ""
                 val poster = it.selectFirst("figure img")?.attr("src")
-                AnimeSearchResponse(
+                newAnimeSearchResponse(
                     title,
                     fixUrl(it.selectFirst("a")?.attr("href") ?: ""),
-                    this.name,
                     TvType.Anime,
-                    poster,
-                    null,
-                    if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(DubStatus.Dubbed) else EnumSet.of(DubStatus.Subbed),
-                )
+                ){
+                    this.posterUrl = poster
+                    this.dubStatus = if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(DubStatus.Dubbed) else EnumSet.of(DubStatus.Subbed)
+                }
             }
 
             items.add(HomePageList(name, home))
@@ -85,24 +86,22 @@ class AnimeflvIOProvider:MainAPI() {
             val isMovie = href.contains("/pelicula/")
             if (image.contains("/static/img/picture.png")) { image = ""}
             if (isMovie) {
-                MovieSearchResponse(
+                newMovieSearchResponse(
                     title,
                     href,
-                    this.name,
                     TvType.AnimeMovie,
-                    image,
-                    null
-                )
+                ){
+                    this.posterUrl = image
+                }
             } else {
-                AnimeSearchResponse(
+                newAnimeSearchResponse(
                     title,
                     href,
-                    this.name,
                     TvType.Anime,
-                    image,
-                    null,
-                    EnumSet.of(DubStatus.Subbed),
-                )
+                ){
+                    this.posterUrl = image
+                    this.dubStatus = EnumSet.of(DubStatus.Subbed)
+                }
             }
         }
     }
@@ -116,9 +115,11 @@ class AnimeflvIOProvider:MainAPI() {
         val episodes = soup.select(".item-season-episodes a").map { li ->
             val href = fixUrl(li.selectFirst("a")?.attr("href") ?: "")
             val name = li.selectFirst("a")?.text() ?: ""
-            Episode(
-                href, name,
-            )
+            newEpisode(
+                href
+            ){
+                this.name = name
+            }
         }.reversed()
 
         val year = Regex("(\\d*)").find(soup.select(".info-half").text())
@@ -144,19 +145,17 @@ class AnimeflvIOProvider:MainAPI() {
                 }
             }
             TvType.AnimeMovie -> {
-                MovieLoadResponse(
+                newMovieLoadResponse(
                     title ?: "",
                     url,
-                    this.name,
                     tvType,
                     url,
-                    poster,
-                    year.toString().toIntOrNull(),
-                    description,
-                    null,
-                    genre,
-                    duration.toString().toIntOrNull(),
-                )
+                ){
+                    this.posterUrl = poster
+                    this.year = year.toString().toIntOrNull()
+                    this.duration = duration.toString().toIntOrNull()
+                    this.tags = genre
+                }
             }
             else -> null
         }
@@ -198,26 +197,26 @@ class AnimeflvIOProvider:MainAPI() {
                             headers = mapOf("Referer" to "https://animeid.to")
                         ).apmap {
                             callback(
-                                ExtractorLink(
+                                newExtractorLink(
                                     "Animeflv.io",
                                     "Animeflv.io",
                                     it.url,
-                                    "https://animeid.to",
-                                    getQualityFromName(it.quality.toString()),
-                                    it.url.contains("m3u8")
-                                )
+                                ){
+                                    this.referer = "https://animeid.to"
+                                    this.quality = getQualityFromName(it.quality.toString())
+                                }
                             )
                         }
                     } else {
                         callback(
-                            ExtractorLink(
+                            newExtractorLink(
                                 name,
                                 "$name ${source.label}",
                                 source.file,
-                                "https://animeid.to",
-                                Qualities.Unknown.value,
-                                isM3u8 = source.file.contains("m3u8")
-                            )
+                            ){
+                                this.referer = "https://animeid.to"
+                                this.quality = Qualities.Unknown.value
+                            }
                         )
                     }
                 }

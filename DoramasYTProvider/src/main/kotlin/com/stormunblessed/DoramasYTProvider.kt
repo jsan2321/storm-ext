@@ -2,7 +2,6 @@ package com.lagradost.cloudstream3.animeproviders
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.extractors.FEmbed
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import java.util.*
@@ -28,7 +27,7 @@ class DoramasYTProvider : MainAPI() {
 
     override var mainUrl = "https://doramasyt.com"
     override var name = "DoramasYT"
-    override var lang = "es"
+    override var lang = "mx"
     override val hasMainPage = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
@@ -37,7 +36,23 @@ class DoramasYTProvider : MainAPI() {
     )
 
     private suspend fun getToken(url: String): Map<String, String> {
-        val maintas = app.get(url)
+        val maintas = app.get(url, headers = mapOf(
+                        "Host" to "www.doramasyt.com",
+                        "User-Agent" to USER_AGENT,
+                        "Accept" to "application/json, text/javascript, */*; q=0.01",
+                        "Accept-Language" to "en-US,en;q=0.5",
+                        "Referer" to "https://www.doramasyt.com/buscar?q=",
+                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                        "X-Requested-With" to "XMLHttpRequest",
+                        "Origin" to mainUrl,
+                        "DNT" to "1",
+                        "Alt-Used" to "www.doramasyt.com",
+                        "Connection" to "keep-alive",
+                        "Sec-Fetch-Dest" to "empty",
+                        "Sec-Fetch-Mode" to "cors",
+                        "Sec-Fetch-Site" to "same-origin",
+                        "TE" to "trailers"
+                ))
         val token = maintas.document.selectFirst("html head meta[name=csrf-token]")?.attr("content") ?: ""
         val cookies = maintas.cookies
         latestToken = token
@@ -56,14 +71,14 @@ class DoramasYTProvider : MainAPI() {
         items.add(
             HomePageList(
                 "Capítulos actualizados",
-                app.get(mainUrl, timeout = 120).document.select(".row-cols-xl-4 li article").map {
-                    val title = it.selectFirst("h2")?.text() ?: it.selectFirst("h2.text-truncate")?.text() ?: ""
+                app.get(mainUrl, timeout = 120).document.select("div.container section ul.row li.col article").map {
+                    val title = it.selectFirst("h3")?.text()
                     val poster = it.selectFirst("img")?.attr("data-src") ?: ""
                     val epRegex = Regex("episodio-(\\d+)")
                     val url = it.selectFirst("a")!!.attr("href").replace("ver/", "dorama/")
                         .replace(epRegex, "sub-espanol")
-                    val epNum = it.selectFirst(".episode")!!.text().toIntOrNull()
-                    newAnimeSearchResponse(title,url) {
+                    val epNum = it.selectFirst("h3")?.text()?.substringAfter("Capítulo")?.toIntOrNull()
+                    newAnimeSearchResponse(title!!,url) {
                         this.posterUrl = fixUrl(poster)
                         addDubStatus(getDubStatus(title), epNum)
                     }
@@ -92,17 +107,12 @@ class DoramasYTProvider : MainAPI() {
             val title = it.selectFirst("h3")!!.text()
             val href = it.selectFirst("a")!!.attr("href")
             val image = it.selectFirst("img")!!.attr("data-src")
-            AnimeSearchResponse(
-                title,
-                href,
-                this.name,
-                TvType.Anime,
-                image,
-                null,
-                if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(
+            newAnimeSearchResponse(title, href, TvType.TvSeries){
+                this. posterUrl = image
+                this.dubStatus = if (title.contains("Latino") || title.contains("Castellano")) EnumSet.of(
                     DubStatus.Dubbed
-                ) else EnumSet.of(DubStatus.Subbed),
-            )
+                ) else EnumSet.of(DubStatus.Subbed)
+            }
         }
     }
 
@@ -117,8 +127,8 @@ class DoramasYTProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         getToken(url)
         val doc = app.get(url, timeout = 120).document
-        val poster = doc.selectFirst("div.mt-5 img")?.attr("data-src") ?: ""
-        val backimage = doc.selectFirst("div.d-sm-none img.lozad.w-100")?.attr("data-src") ?: ""
+        val poster = doc.selectFirst("img.rounded-3")?.attr("data-src") ?: ""
+        val backimage = doc.selectFirst("img.w-100")?.attr("data-src") ?: ""
         //val backimageregex = Regex("url\\((.*)\\)")
         //val backimage = backimageregex.find(backimagedoc)?.destructured?.component1() ?: ""
         val title = doc.selectFirst(".fs-2")?.text() ?: ""
@@ -152,7 +162,6 @@ class DoramasYTProvider : MainAPI() {
                 ),
                 cookies = latestCookie,
                 data = mapOf("_token" to latestToken)).parsed<CapList>()
-
         val epList = capJson.eps.map { epnum ->
             val epUrl = "${url.replace("-sub-espanol","").replace("/dorama/","/ver/")}-episodio-${epnum.num}"
             newEpisode(
@@ -172,18 +181,38 @@ class DoramasYTProvider : MainAPI() {
         }
     }
 
+    suspend fun customLoadExtractor(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit)
+    {
+        loadExtractor(url
+            .replaceFirst("https://hglink.to", "https://streamwish.to")
+            .replaceFirst("https://swdyu.com","https://streamwish.to")
+            .replaceFirst("https://mivalyo.com", "https://vidhidepro.com")
+            .replaceFirst("https://filemoon.link", "https://filemoon.sx")
+            .replaceFirst("https://sblona.com", "https://watchsb.com")
+            , referer, subtitleCallback, callback)
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        app.get(data).document.select("#myTab li").apmap {
+        app.get(data).document.select("#myTab li").amap {
             val encodedurl = it.select(".play-video").attr("data-player")
             val urlDecoded = base64Decode(encodedurl)
-            val url = (urlDecoded).replace("https://monoschinos2.com/reproductor?url=", "")
-                    .replace("https://sblona.com","https://watchsb.com").replace("https://swdyu.com","https://streamwish.to")
-            loadExtractor(url, mainUrl, subtitleCallback, callback)
+            if(urlDecoded.startsWith("http")){
+                val url = (urlDecoded).replace("https://monoschinos2.com/reproductor?url=", "")
+                customLoadExtractor(url, mainUrl, subtitleCallback, callback)
+            }else{
+                app.get("$mainUrl/reproductor?video=$encodedurl").document.selectFirst("iframe")?.attr("src")?.let {
+                    customLoadExtractor(it, mainUrl, subtitleCallback, callback)
+                }
+            }
         }
         return true
     }
