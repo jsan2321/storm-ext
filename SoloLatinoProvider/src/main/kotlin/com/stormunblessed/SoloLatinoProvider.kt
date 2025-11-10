@@ -41,7 +41,7 @@ class SoloLatinoProvider : MainAPI() {
                 val title = it.selectFirst("a div.data h3")?.text()
                 val link = it.selectFirst("a")?.attr("href")
                 val img = it.selectFirst("div.poster img.lazyload")?.attr("data-srcset")
-                newTvSeriesSearchResponse(title!!, link!!, tvType, true){
+                newTvSeriesSearchResponse(title!!, link!!, tvType, true) {
                     this.posterUrl = img
                 }
             }
@@ -57,7 +57,7 @@ class SoloLatinoProvider : MainAPI() {
             val title = it.selectFirst("a div.data h3")?.text()
             val link = it.selectFirst("a")?.attr("href")
             val img = it.selectFirst("div.poster img.lazyload")?.attr("data-srcset")
-            newTvSeriesSearchResponse(title!!, link!!, TvType.TvSeries){
+            newTvSeriesSearchResponse(title!!, link!!, TvType.TvSeries) {
                 this.posterUrl = img
             }
         }
@@ -91,7 +91,7 @@ class SoloLatinoProvider : MainAPI() {
                             it.trim().toIntOrNull()
                         }
                     val realimg = it.selectFirst("div.imagen img")?.attr("src")
-                    newEpisode(epurl){
+                    newEpisode(epurl) {
                         this.name = epTitle
                         this.season = seasonEpisodeNumber?.getOrNull(0)
                         this.episode = seasonEpisodeNumber?.getOrNull(1)
@@ -128,22 +128,25 @@ class SoloLatinoProvider : MainAPI() {
     }
 
 
-
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        app.get(data).document.selectFirst("iframe")?.attr("src")?.let { frameUrl ->
-            if (frameUrl.startsWith("https://embed69.org/")) {
-                Embed69Extractor.load(frameUrl, data, subtitleCallback, callback)
-            } else {
+        app.get(data).document.selectFirst("iframe")?.attr("src")?.let {
+            if (it.startsWith("https://embed69.org/")) {
+                Embed69Extractor.load(it, data, subtitleCallback, callback)
+            } else if (it.startsWith("https://xupalace.org/video")) {
                 val regex = """(go_to_player|go_to_playerVast)\('(.*?)'""".toRegex()
-                regex.findAll(app.get(frameUrl).document.html()).map { it.groupValues.get(2) }
+                regex.findAll(app.get(it).document.html()).map { it.groupValues.get(2) }
                     .toList().amap {
                         loadExtractor(fixHostsLinks(it), data, subtitleCallback, callback)
                     }
+            } else { // https://xupalace.org/uqlink.php or others
+                app.get(it).document.selectFirst("iframe")?.attr("src")?.let {
+                    loadExtractor(fixHostsLinks(it), data, subtitleCallback, callback)
+                }
             }
         }
         return true

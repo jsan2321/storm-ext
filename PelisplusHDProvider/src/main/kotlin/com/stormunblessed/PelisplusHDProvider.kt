@@ -30,7 +30,8 @@ class PelisplusHDProvider : MainAPI() {
             "Doramas" to "#default-tab-4",
         )
         map.forEach {
-            items.add(HomePageList(
+            items.add(
+                HomePageList(
                 it.key,
                 document.select(it.value).select("a.Posters-link").map { element ->
                     element.toSearchResult()
@@ -46,11 +47,11 @@ class PelisplusHDProvider : MainAPI() {
         val posterUrl = fixUrl(this.select(".Posters-img").attr("src"))
         val isMovie = href.contains("/pelicula/")
         return if (isMovie) {
-            newMovieSearchResponse(title, href, TvType.Movie){
+            newMovieSearchResponse(title, href, TvType.Movie) {
                 this.posterUrl = posterUrl
             }
         } else {
-            newTvSeriesSearchResponse(title,href, TvType.Movie){
+            newTvSeriesSearchResponse(title, href, TvType.Movie) {
                 this.posterUrl = posterUrl
             }
         }
@@ -67,11 +68,11 @@ class PelisplusHDProvider : MainAPI() {
             val isMovie = href.contains("/pelicula/")
 
             if (isMovie) {
-                newMovieSearchResponse(title,href, TvType.Movie){
+                newMovieSearchResponse(title, href, TvType.Movie) {
                     this.posterUrl = image
                 }
             } else {
-                newTvSeriesSearchResponse(title, href, TvType.TvSeries){
+                newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                     this.posterUrl = image
                 }
             }
@@ -96,7 +97,7 @@ class PelisplusHDProvider : MainAPI() {
             val isValid = seasonid?.size == 2
             val episode = if (isValid) seasonid?.getOrNull(1) else null
             val season = if (isValid) seasonid?.getOrNull(0) else null
-            newEpisode(href){
+            newEpisode(href) {
                 this.name = name
                 this.season = season
                 this.episode = episode
@@ -110,7 +111,7 @@ class PelisplusHDProvider : MainAPI() {
 
         return when (tvType) {
             TvType.TvSeries -> {
-                newTvSeriesLoadResponse(title!!, url, tvType, episodes){
+                newTvSeriesLoadResponse(title!!, url, tvType, episodes) {
                     this.posterUrl = fixUrl(poster!!)
                     this.year = year
                     this.tags = tags
@@ -119,7 +120,7 @@ class PelisplusHDProvider : MainAPI() {
             }
 
             TvType.Movie -> {
-                newMovieLoadResponse(title!!, url, tvType, url){
+                newMovieLoadResponse(title!!, url, tvType, url) {
                     this.posterUrl = fixUrl(poster!!)
                     this.year = year
                     this.plot = description
@@ -142,84 +143,23 @@ class PelisplusHDProvider : MainAPI() {
                 fetchUrls(
                     script
                 )
-                    .amap { frameLink ->
-                        if (frameLink.startsWith("https://embed69.org/")) {
-                            Embed69Extractor.load(frameLink, data, subtitleCallback, callback)
-                        } else {
+                    .amap {
+                        if (it.startsWith("https://embed69.org/")) {
+                            Embed69Extractor.load(it, data, subtitleCallback, callback)
+                        } else if (it.startsWith("https://xupalace.org/video")) {
                             val regex = """(go_to_player|go_to_playerVast)\('(.*?)'""".toRegex()
-                            regex.findAll(app.get(frameLink).document.html()).toList().amap {
-                                val current = it?.groupValues?.get(2) ?: ""
-                                var link: String? = null
-                                if (URLUtil.isValidUrl(current)) {
-                                    link = fixUrl(current)
-                                } else {
-                                    try {
-                                        link =
-                                            base64Decode(
-                                                it?.groupValues?.get(1) ?: ""
-                                            )
-                                    } catch (e: Throwable) {
-                                    }
+                            regex.findAll(app.get(it).document.html()).map { it.groupValues.get(2) }
+                                .toList().amap {
+                                    loadExtractor(
+                                        fixHostsLinks(it),
+                                        data,
+                                        subtitleCallback,
+                                        callback
+                                    )
                                 }
-                                if (!link.isNullOrBlank()) {
-                                    if (link.contains("/video/") || link.contains(
-                                            "https://api.mycdn.moe/embed.php?customid"
-                                        )
-                                    ) {
-                                        val doc = app.get(link).document
-                                        doc.select("div.ODDIV li").amap {
-                                            val linkencoded = it?.attr("data-r")
-                                            if(!linkencoded.isNullOrBlank()){
-                                                val linkdecoded = base64Decode(linkencoded)
-                                                    .replace(
-                                                        Regex("https://owodeuwu.xyz|https://sypl.xyz"),
-                                                        "https://embedsito.com"
-                                                    )
-                                                    .replace(Regex(".poster.*"), "")
-                                                loadExtractor(
-                                                    fixHostsLinks(linkdecoded),
-                                                    link,
-                                                    subtitleCallback,
-                                                    callback
-                                                )
-                                            }
-                                            val secondlink =
-                                                it?.attr("onclick")?.substringAfter("('")
-                                                    ?.substringBefore("',")
-                                            if(!secondlink.isNullOrBlank()){
-                                                if(secondlink.startsWith("http")){
-                                                    loadExtractor(
-                                                        fixHostsLinks(secondlink),
-                                                        link,
-                                                        subtitleCallback,
-                                                        callback
-                                                    )
-                                                }else{
-                                                    val restwo = app.get(
-                                                        "https://api.mycdn.moe/player/?id=$secondlink",
-                                                        allowRedirects = false
-                                                    ).document
-                                                    val thirdlink =
-                                                        restwo.selectFirst("body > iframe")?.attr("src")
-                                                            ?.replace(
-                                                                Regex("https://owodeuwu.xyz|https://sypl.xyz"),
-                                                                "https://embedsito.com"
-                                                            )
-                                                            ?.replace(Regex(".poster.*"), "")
-                                                    loadExtractor(
-                                                        fixHostsLinks(thirdlink!!),
-                                                        link,
-                                                        subtitleCallback,
-                                                        callback
-                                                    )
-                                                }
-                                            }
-
-                                        }
-                                    } else {
-                                        loadExtractor(fixHostsLinks(link), data, subtitleCallback, callback)
-                                    }
-                                }
+                        } else { // https://xupalace.org/uqlink.php or others
+                            app.get(it).document.selectFirst("iframe")?.attr("src")?.let {
+                                loadExtractor(fixHostsLinks(it), data, subtitleCallback, callback)
                             }
                         }
 
