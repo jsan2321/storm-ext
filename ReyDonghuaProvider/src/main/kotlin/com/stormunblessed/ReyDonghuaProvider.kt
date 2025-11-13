@@ -7,7 +7,9 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.nicehttp.NiceResponse
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.jsoup.nodes.Element
 import java.net.URL
+import java.time.LocalDate
 import java.util.*
 import kotlin.collections.ArrayList
 
@@ -38,61 +40,39 @@ class ReyDonghuaProvider : MainAPI() {
         return latestCookie
     }
 
+     override val mainPage = mainPageOf(
+        "donghuas?fecha=${Calendar.getInstance().get(Calendar.YEAR)}" to "Recientes",
+        "donghuas?" to "Donghuas",
+    )
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val items = ArrayList<HomePageList>()
-        val isHorizontal = true
-        items.add(
-            HomePageList(
-                "Nuevos Episodios",
-                app.get(mainUrl).document.select(".mt-1 a").map {
-                    val title = it.selectFirst("div.col div.card div.bg-card h2.card-title")?.text()
-                        ?.substringBefore(" - ") ?: ""
-                    val poster =
-                        it.selectFirst("div.col div.card img.lazy")?.attr("data-src") ?: ""
-                    val url =
-                        it.attr("href").replace("/ver", "/donghua").substringBefore("-episodio")
-                    newAnimeSearchResponse(title, url) {
-                        this.posterUrl = fixUrl(poster)
-                        dubStatus = EnumSet.of(DubStatus.Subbed)
-                    }
-                }, isHorizontal
-            )
+        val document = app.get("$mainUrl/${request.data}&p=$page").document
+        val home = document.select("li.col")
+            .mapNotNull { it.toSearchResult() }
+        return newHomePageResponse(
+            list = HomePageList(
+                name = request.name,
+                list = home,
+                isHorizontalImages = false
+            ),
+            hasNext = true
         )
-        items.add(
-            HomePageList(
-                "Series recientes",
-                app.get(mainUrl).document.select("div.mt-4 div.container-lg div.container-lg div.row-cols-xxl-6 a").map {
-                    val title = it.selectFirst("div.col h2")!!.text()
-                    val poster =
-                        it.selectFirst("div.col img.lazy")?.attr("data-src") ?: ""
-                    val url = it.attr("href")
-                    newAnimeSearchResponse(title, url) {
-                        this.posterUrl = fixUrl(poster)
-                        this.dubStatus = EnumSet.of(DubStatus.Subbed)
-                    }
-                }
-            )
-        )
-        if (items.size <= 0) throw ErrorLoadingException()
-        return newHomePageResponse(items)
+    }
+
+    private fun Element.toSearchResult(): SearchResponse {
+        val title = this.select("a div h2").text()
+        val href = this.select("a").attr("href")
+        val posterUrl = fixUrlNull(this.select("a div.position-relative img").attr("data-src"))
+        return newMovieSearchResponse(title, href, TvType.Movie) {
+            this.posterUrl = posterUrl
+        }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        return app.get("$mainUrl/buscar?q=$query", timeout = 120).document.select("li.col").map {
-            val title = it.selectFirst("h2")!!.text()
-            val href = fixUrl(it.selectFirst("a")!!.attr("href"))
-            val image = it.selectFirst("img")!!.attr("data-src")
-            newAnimeSearchResponse(
-                title,
-                href,
-                TvType.Anime,
-            ){
-                this.posterUrl = fixUrl(image)
-                this.dubStatus = EnumSet.of(
-                    DubStatus.Subbed
-                )
-            }
-        }
+        val document = app.get("$mainUrl/buscar?q=$query").document
+        val results =
+            document.select("li.col").mapNotNull { it.toSearchResult() }
+        return results
     }
 
     data class PaginateUrl(
@@ -141,10 +121,10 @@ class ReyDonghuaProvider : MainAPI() {
         getToken(url)
         val doc = app.get(url, timeout = 120).document
         val caplist = doc.selectFirst(".caplist")!!.attr("data-ajax")
-        val poster = doc.selectFirst("div.mierda img.lazy")!!.attr("data-src")
-        val title = doc.selectFirst("div.container div.row div.col h2.text-light")!!.text()
-        val description = doc.selectFirst("div.container div.row div.col p.text-muted")!!.text()
-        val genres = doc.select("div.container div#profile-tab-pane div.row div.lh-lg a span")
+        val poster = doc.selectFirst(".aspecto")!!.attr("data-src")
+        val title = doc.selectFirst(".fs-3")!!.text()
+        val description = doc.selectFirst("p.text-muted")!!.text()
+        val genres = doc.select(".lh-lg a")
             .map { it.text() }
         val status =
             when (doc.selectFirst("div.mb-4 > div:nth-child(1) > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > div:nth-child(2)")
@@ -182,8 +162,23 @@ class ReyDonghuaProvider : MainAPI() {
             val encodedurl = it.select(".play-video").attr("data-player")
             val urlDecoded =
                 base64Decode(encodedurl).replace("https://playerwish.com", "https://streamwish.to")
-            loadExtractor(urlDecoded, mainUrl, subtitleCallback, callback)
+            loadExtractor(fixHostsLinks(urlDecoded), mainUrl, subtitleCallback, callback)
         }
         return true
     }
+}
+
+fun fixHostsLinks(url: String): String {
+    return url
+        .replaceFirst("https://hglink.to", "https://streamwish.to")
+        .replaceFirst("https://swdyu.com", "https://streamwish.to")
+        .replaceFirst("https://cybervynx.com", "https://streamwish.to")
+        .replaceFirst("https://dumbalag.com", "https://streamwish.to")
+        .replaceFirst("https://mivalyo.com", "https://vidhidepro.com")
+        .replaceFirst("https://dinisglows.com", "https://vidhidepro.com")
+        .replaceFirst("https://filemoon.link", "https://filemoon.sx")
+        .replaceFirst("https://sblona.com", "https://watchsb.com")
+        .replaceFirst("https://lulu.st", "https://lulustream.com")
+        .replaceFirst("https://uqload.io", "https://uqload.com")
+        .replaceFirst("https://do7go.com", "https://dood.la")
 }
