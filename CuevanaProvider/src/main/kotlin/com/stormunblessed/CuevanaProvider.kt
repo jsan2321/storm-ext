@@ -35,10 +35,10 @@ class CuevanaProvider : MainAPI() {
         urls.map { (url, name) ->
             val soup = app.get(url).document
             val home = soup.select("section li.TPostMv").map {
-                val title = it.selectFirst("span.Title")!!.text()
-                val link = it.selectFirst("a")!!.attr("href").replace("^/".toRegex(), "$mainUrl/")
+                val title = it.selectFirst("span.Title")?.text() ?: "Sin titulo"
+                val link = it.selectFirst("a")?.attr("href")?.replace("^/".toRegex(), "$mainUrl/") ?: ""
                 newTvSeriesSearchResponse(title, link, if (link.contains("/pelicula/")) TvType.Movie else TvType.TvSeries){
-                    this.posterUrl = it.selectFirst("img")!!.attr("src").replace("^/".toRegex(), "$mainUrl/")
+                    this.posterUrl = it.selectFirst("img")?.attr("src")?.replace("^/".toRegex(), "$mainUrl/")
                 }
             }
 
