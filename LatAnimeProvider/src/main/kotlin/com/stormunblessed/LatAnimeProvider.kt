@@ -118,7 +118,7 @@ class LatAnimeProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         val doc = appGetChildMainUrl(url).document
         val poster = doc.selectFirst("div.col-lg-3.col-md-4 div.series2 div.serieimgficha img.img-fluid2")!!.attr("src")
-        val backimage = doc.selectFirst("div.col-lg-3.col-md-4 div.series2 div.serieimgficha img.img-fluid2")!!.attr("src")
+        val backimage = doc.selectFirst("div.container div.row div.row div a div img")!!.attr("data-src")
         val title = doc.selectFirst("div.col-lg-9.col-md-8 h2")!!.text()
         val type = doc.selectFirst("div.chapterdetls2")?.text() ?: ""
         val description = doc.selectFirst("div.col-lg-9.col-md-8 p.my-2.opacity-75")!!.text().replace("Ver menos", "")
@@ -131,10 +131,11 @@ class LatAnimeProvider : MainAPI() {
         val episodes = doc.select("div.container div.row div.row div a").map {
             val name = it.selectFirst("div.cap-layout")!!.text()
             val link = it!!.attr("href")
-            val epThumb = it.selectFirst(".animeimghv")?.attr("data-src")
-                    ?: it.selectFirst("div.animeimgdiv img.animeimghv")?.attr("src")
+            val epThumb = it.selectFirst("div img")?.attr("data-src")
+                    ?: it.selectFirst("div img")?.attr("src")
             newEpisode(link){
                 this.name = name
+                this.posterUrl = epThumb
             }
         }
         return newAnimeLoadResponse(title, url, getType(title)) {

@@ -29,7 +29,7 @@ class PelispediaProvider:MainAPI() {
             val doc = app.get(url).document
             val home =  doc.select("section.movies article").map {
                 val title = it.selectFirst("h2.entry-title")?.text() ?: ""
-                val img = it.selectFirst("div.post-thumbnail figure img")?.attr("data-src")?.replaceFirst("//", "https://") ?: ""
+                val img = it.selectFirst("div.post-thumbnail figure img")?.attr("src")?.replaceFirst("//", "https://") ?: ""
                 val link = it.selectFirst("a.lnk-blk")?.attr("href") ?: ""
                 newTvSeriesSearchResponse(
                     title,
@@ -65,8 +65,8 @@ class PelispediaProvider:MainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         val doc = app.get(url).document
         val tvType = if (url.contains("pelicula")) TvType.Movie else TvType.TvSeries
-        val poster = doc.selectFirst("article.post div.post-thumbnail figure img")?.attr("data-src")?.replaceFirst("//", "https://") ?: ""
-        val backimage = doc.selectFirst("div#aa-wp div.bghd img.TPostBg")?.attr("data-src")?.replaceFirst("//", "https://") ?: poster
+        val poster = doc.selectFirst(".alg-ss figure img")?.attr("src")?.replaceFirst("//", "https://") ?: ""
+        val backimage = doc.selectFirst("div#aa-wp div.bghd img.TPostBg")?.attr("src")?.replaceFirst("//", "https://") ?: poster
         val title = doc.selectFirst("h1.entry-title")?.text() ?: ""
         val plot = doc.selectFirst(".description > p:nth-child(2)")?.text() ?: doc.selectFirst(".description > p")?.text()
         val tags = doc.select("span.genres a").map { it.text() }
@@ -102,6 +102,7 @@ class PelispediaProvider:MainAPI() {
                 ){
                     this.episode = episode
                     this.season = season
+                    this.posterUrl = poster
                 })
             }
         }
