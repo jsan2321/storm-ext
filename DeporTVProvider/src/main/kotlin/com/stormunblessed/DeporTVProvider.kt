@@ -21,6 +21,7 @@ import com.lagradost.cloudstream3.utils.CLEARKEY_UUID
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.getAndUnpack
 import com.lagradost.cloudstream3.utils.newDrmExtractorLink
+import com.lagradost.nicehttp.NiceResponse
 import com.stormunblessed.StreamedInfo
 import org.mozilla.javascript.Context
 import java.net.URL
@@ -92,21 +93,26 @@ class DeporTVProvider : MainAPI() {
         streamedInfo.init()
         val agendaData = sites.amap {
             val url = it.agendaUrl
-            val res = app.get(url)
+            var res: NiceResponse? = null;
+            try {
+                res = app.get(url, timeout = 5)
+            }catch(e: Exception){}
             var events: List<EventData> = emptyList()
-            if (it.key.equals(SiteKey.LA14HD) || it.key.equals(SiteKey.STREAMTPCLOUD)) {
-                events = AppUtils.tryParseJson<List<La14HDMatchInfo>>(res.text)
-                    ?.map {
-                        EventData(
-                            it.title,
-                            transformHourToLocal(it.time, "GMT-5"),
-                            listOf(it.link),
-                            ""
-                        )
-                    } ?: emptyList()
-            } else {
-                events = res.document.select(".menu > li")
-                    .mapNotNull { it.rusticoToEventData(url) }
+            if(res != null){
+                if (it.key.equals(SiteKey.LA14HD) || it.key.equals(SiteKey.STREAMTPCLOUD)) {
+                    events = AppUtils.tryParseJson<List<La14HDMatchInfo>>(res.text)
+                        ?.map {
+                            EventData(
+                                it.title,
+                                transformHourToLocal(it.time, "GMT-5"),
+                                listOf(it.link),
+                                ""
+                            )
+                        } ?: emptyList()
+                } else {
+                    events = res.document.select(".menu > li")
+                        .mapNotNull { it.rusticoToEventData(url) }
+                }
             }
             events
         }.flatten();
