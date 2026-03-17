@@ -13,7 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class CuevanaProvider : MainAPI() {
-    override var mainUrl = "https://cuevana.bi"
+    override var mainUrl = "https://cue.cuevana3.nu"
     override var name = "Cuevana"
     override var lang = "mx"
     override val hasMainPage = true
@@ -28,9 +28,9 @@ class CuevanaProvider : MainAPI() {
         val items = ArrayList<HomePageList>()
         val urls = listOf(
             Pair("$mainUrl/peliculas", "Peliculas actualizadas"),
-            Pair("$mainUrl/peliculas?orden=tendencias", "Peliculas Tendencias"),
+            Pair("$mainUrl/peliculas/estrenos", "Peliculas Estrenos"),
             Pair("$mainUrl/series", "Series actualizadas"),
-            Pair("$mainUrl/series?orden=tendencias", "Series Tendencias"),
+            Pair("$mainUrl/series/estrenos", "Series Estrenos"),
         )
         urls.map { (url, name) ->
             val soup = app.get(url).document
@@ -50,7 +50,7 @@ class CuevanaProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/explorar?s=${query}"
+        val url = "$mainUrl/search?q=${query}"
         val document = app.get(url).document
 
         return document.select("li.TPostMv").map {
