@@ -1,0 +1,9 @@
+{
+  "name": "Storm-ext Fork by jsan2321",
+  "description": "A Storm-ext fork with the jsan2321 changes.",
+  "iconUrl": "https://raw.githubusercontent.com/jsan2321/storm-ext/master/assets/repoIcon.jpg",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/jsan2321/storm-ext/builds/plugins.json"
+  ]
+}
