@@ -28,9 +28,9 @@ class CuevanaProvider : MainAPI() {
         val items = ArrayList<HomePageList>()
         val urls = listOf(
             Pair("$mainUrl/peliculas", "Peliculas actualizadas"),
-            Pair("$mainUrl/peliculas/estrenos", "Peliculas Estrenos"),
+            Pair("$mainUrl/peliculas?orden=tendencias", "Peliculas Tendencias"),
             Pair("$mainUrl/series", "Series actualizadas"),
-            Pair("$mainUrl/series/estrenos", "Series Estrenos"),
+            Pair("$mainUrl/series?orden=tendencias", "Series Tendencias"),
         )
         urls.map { (url, name) ->
             val soup = app.get(url).document
