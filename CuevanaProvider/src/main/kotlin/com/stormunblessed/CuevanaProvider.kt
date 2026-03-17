@@ -50,7 +50,7 @@ class CuevanaProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/search?q=${query}"
+        val url = "$mainUrl/explorar?s=${query}"
         val document = app.get(url).document
 
         return document.select("li.TPostMv").map {
